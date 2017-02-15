@@ -1,0 +1,256 @@
+---
+title: 'Results for NEJM SPRINT Challenge'
+author: "Himes Lab"
+date: Feb 14, 2017
+output:
+  html_document:
+    toc: true 
+    depth: 3 
+    theme: paper 
+    highlight: tango
+---
+
+***
+
+
+```{r eval=TRUE, echo=FALSE, message=FALSE,warning=FALSE}
+### load library ###
+library(ggplot2)
+library(pander)
+library(reshape2)
+library(data.table)
+library(survival)
+library(forestplot)
+library(ggfortify)
+```
+
+
+```{r set-options, echo=FALSE, cache=FALSE}
+options(width = 400)
+```  
+
+## Data from SPRINT
+* Original information:
+    + Baseline measurement for stuey participants: baseline.csv
+    + Occurance of clinical outcomes during treatment: outcomes.csv
+    + Occurance of serious adverse events during treatment: safety.csv
+    + Blood pressure measured in each visit points duringn clinical trial course: bp.csv (Use modifed bp.csv)
+    
+```{r eval=F, echo=FALSE, message=FALSE}
+baseline <- read.csv("data/baseline.csv") # study participants
+baseline$INTENSIVE <- as.factor(baseline$INTENSIVE)
+levels(baseline$INTENSIVE) <- c("STANDARD","INTENSIVE")
+baseline$FEMALE <- as.factor(baseline$FEMALE)
+levels(baseline$FEMALE) <- c("MALE","FEMALE")
+baseline$SUB_SENIOR <- as.factor(baseline$SUB_SENIOR)
+levels(baseline$SUB_SENIOR) <- c("<75yr",">=75yr")
+outcomes <- read.csv("data/outcomes.csv")
+safety <- read.csv("data/safety.csv")
+dat <- Reduce(function(x, y) merge(x, y, by="MASKID", all=TRUE), list(baseline,outcomes,safety))
+
+```
+
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+### Import data ###
+dat <- read.csv("../intermediate/SPRINT.csv")
+bp <- read.csv("../intermediate/bp.csv")
+SBP_5yr <- read.csv("../intermediate/SBP_5yr.csv")
+datbp_all <- merge(SBP_5yr,dat,by=c("MASKID"),all.x=TRUE)
+```
+
+
+## Replication results from NEJM paper
+
+* Figure 2
+
+
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+bptime <- bp
+bptime$INTENSIVE <- as.factor(bptime$INTENSIVE)
+levels(bptime$INTENSIVE) <- c("STANDARD","INTENSIVE")
+setDT(bptime)
+bp_ct <- bptime[,list(mean=mean(SBP),sd=sd(SBP),n=length(SBP)),by=c("INTENSIVE","visitcode2")]
+bp_ct$error_norm <- qnorm(0.975)*bp_ct$sd/sqrt(bp_ct$n)
+bp_ct$error_t <- qt(0.975,df=bp_ct$n-1)*bp_ct$sd/sqrt(bp_ct$n)
+# plot
+datplot <- data.frame(bp_ct)
+ggplot(datplot,aes(x=visitcode2,y=mean,colour=INTENSIVE,group=INTENSIVE,fill=INTENSIVE))+geom_point()+geom_line()+geom_errorbar(aes(ymax=mean+error_norm, ymin=mean-error_norm), width=0.2) + scale_x_continuous(breaks=seq(0,60,6)) +scale_y_continuous(limits=c(110,150)) + xlab("Visit Month") + ylab("SBP") + theme(legend.title=element_blank(), legend.position = "bottom")
+```
+
+## Distribution of mean and median trial SBP
+
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+ggplot(data=SBP_5yr,aes(x=mean))+ geom_histogram(aes(y=..density..),binwidth=5,colour="black",fill="white") + geom_density(alpha=.2, fill="#FF6666") + theme(legend.title=element_blank()) + xlab("Mean trial SBP") 
+ggplot(data=SBP_5yr,aes(x=median)) + geom_histogram(aes(y=..density..),binwidth=5,colour="black",fill="white") + geom_density(alpha=.2, fill="#FF6666") + theme(legend.title=element_blank()) + xlab("Median trial SBP") 
+```
+
+## Spline model
+
+### Death
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+fit <- coxph(Surv(T_DEATH,EVENT_DEATH)~pspline(median,df=4),data=datbp_all)
+termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1)
+```
+
+### Primary
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+fit <- coxph(Surv(T_PRIMARY,EVENT_PRIMARY)~pspline(median,df=4),data=datbp_all)
+termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1)
+```
+
+### Primary or death
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+fit <- coxph(Surv(T_PRIMARYORDEATH,EVENT_PRIMARYORDEATH)~pspline(median,df=4),data=datbp_all)
+termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1)
+```
+
+## Proportions of subjects in trail arm by partition
+
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+### Function used in this section ###
+subctHR <- function(dt,x,covars) { # x: event name. Will add "EVENT_" for event coding and "T_" for time coding; covars: covariates in survival model. Put the one of interest (e.g. SBP) as the first one
+  if (length(covars)==1) {covarexp <- covars} else {covarexp <- paste(covars,collapse="+")}
+  if (grepl("SAE|ERS|MCE|OHO",x)){
+    event <- paste0(x,"_EVNT")
+    time <- paste0(x,"_DAYS")
+  } else {
+    event <- paste0("EVENT_",x)
+    time <- paste0("T_",x)
+  }
+  form <- as.formula(paste0("Surv(",time,",",event,")~",covarexp))
+  # get the variable of interest
+  invar <- covars[1]
+  # remove missingness
+  dt <- dt[!(is.na(dt[,invar])),]
+  # compute HR for each subgroup
+  res <- summary(coxph(form,data=dt))
+  # get all the variable names of survival results
+  row_names <- row.names(res$coefficients)
+  # get names of the variable of interest
+  invar_names <- row_names[grep(invar,row_names)]
+  # create reference group
+  refname <- unique(dt[,invar])[which(!unique(dt[,invar])%in%sub(invar,"",invar_names))]
+  HR.CI <- 1
+  pval<- NA
+  HR <- 1
+  upperCI <- 1
+  lowerCI <- 1
+  ct <- dt[which(dt[,invar]==refname),c(event,invar,"INTENSIVE")]
+  nevent <- sum(ct[,event])
+  ntotal <- length(ct[,event])
+  prop <- round(nevent/ntotal*100,2)
+  nintarm <- length(ct[which(ct$INTENSIVE=="INTENSIVE"),event])
+  propintarm <- round(nintarm/ntotal*100,2)
+  sample <- paste0(nevent,"/",ntotal,"(",prop,")")
+  sampintarm <- paste0(nintarm,"/",ntotal,"(",propintarm,")")
+  out <- data.frame(group=refname,sample,intensive_arm=sampintarm,HR.CI,pval,HR,upperCI,lowerCI)
+  for (i in 1:length(invar_names)) {
+    sub_coef <- res$coefficients[i,]
+    pval <- unname(sub_coef[5])
+    sub_conf <- res$conf.int[i,]
+    HR <- unname(sub_conf[1])
+    lowerCI <- unname(sub_conf[3])
+    upperCI <- unname(sub_conf[4])
+    HR.CI <- paste0(round(HR,2),"(",round(lowerCI,2),"-",round(upperCI,2),")")
+    name <- invar_names[i]
+    group <- sub(invar,"",name) # replace first string
+    # count number in each subgroups
+    ct <- dt[which(dt[,invar]==group),c(event,invar,"INTENSIVE")]
+    nevent <- sum(ct[,event])
+    ntotal <- length(ct[,event])
+    prop <- round(nevent/ntotal*100,2)
+    nintarm <- length(ct[which(ct$INTENSIVE=="INTENSIVE"),event])
+    propintarm <- round(nintarm/ntotal*100,2)
+    sample <- paste0(nevent,"/",ntotal,"(",prop,")")
+    sampintarm <- paste0(nintarm,"/",ntotal,"(",propintarm,")")
+    out <- rbind(out,data.frame(group,sample,intensive_arm=sampintarm,HR.CI,pval,HR,upperCI,lowerCI))
+  }
+  out$pval <- ifelse(out$pval>=0.01,round(out$pval,2),format(out$pval,digits=3))
+  return(out)
+}
+```
+
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+forplot <- function(dt){
+  if ("HR"%in%names(dt)) {risk <- "HR"} else if ("OR"%in%names(dt)) {risk <- "OR"}
+  riskcomb <- paste0(risk,".CI")
+  ctplot <- dt[,c("group","sample","intensive_arm",riskcomb)]
+  names(ctplot)[3] <- "riskcomb"
+  HRplot <- dt[,c(risk,"upperCI","lowerCI")]
+  ctplot[,names(ctplot)] <- sapply(ctplot[, names(ctplot)], as.character)
+  rowname1 <- c(group=" ",sample="Event/Total",pval="Intensive arm/Total",riskcomb=" ")
+  rowname2 <- c(group="Group",sample="Counts(%)",pval="Counts(%)",riskcomb=paste0(risk,"(95% CI)"))
+  data1 <- rbind(rowname2,ctplot)
+  ctplot <- rbind(rowname1,data1)
+  ctplot <- ctplot[,c(1,4)] # 0.5
+  #ctplot <- ctplot[,2:4] # 0.3
+  m <- c(NA,NA,round(HRplot[,1],2))
+  l <- c(NA,NA,round(HRplot$lowerCI,2))
+  u <- c(NA,NA,round(HRplot$upperCI,2))
+  min <- min(l,na.rm=TRUE)
+  max <- max(u,na.rm=TRUE)
+  # assign the ticks for x-axis, or will get into trouble
+  if(floor(min)==0){start=0.5}else{start=floor(min)}
+  if(ceiling(max)>=2.5){end=2.5}else{end=ceiling(max)}
+  #plot <- forestplot(ctplot,m,l,u,clip=c(0.5,2.5),xlog=TRUE,graphwidth=unit(c(0.15,0),"npc"),xticks = seq(start,end,by=0.5),txt_gp=fpTxtGp(label=list(gpar(cex=0.7)),ticks = gpar(cex=0.7)),new_page=FALSE,boxsize=0.15) # graphwidth (range for CI, 1-start point for CI), ,graphwidth=unit(c(0.35,0),"npc"); colgap (gap between texttable and plot; width range of plot) ,colgap=unit(c(0,0.2),"npc")
+  plot <- forestplot(ctplot,m,l,u,clip=c(0.5,2.5),xlog=TRUE,graphwidth=unit(c(0.5,0),"npc"),xticks = c(0.75,1,2,3,4),txt_gp=fpTxtGp(label=list(gpar(cex=0.5)),ticks = gpar(cex=0.5)),boxsize=0.12)
+}
+
+```
+
+
+### Death outcome
+```{r eval=F, echo=FALSE, message=FALSE}
+SBP_all <- datbp_all
+pts <- c(min(SBP_all$median),114,130,140,max(SBP_all$median))
+SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
+orglev <- levels(SBP_all$medianpar)
+# make 118-138 as reference group
+SBP_all <- within(SBP_all,medianpar<- relevel(medianpar,ref=2))
+ctHR <- subctHR(SBP_all,"DEATH","medianpar")
+ctHR$group <- factor(ctHR$group, levels=orglev)
+ctHR_death <- ctHR[order(ctHR$group),]
+ctHR_death$group <- c("<115 mmHg","115-130 mmHg", "131-140 mmHg",">140 mmHg")
+row.names(ctHR_death) <- NULL
+pander(ctHR_death[,1:5])
+```
+
+```{r eval=F, echo=FALSE, message=FALSE}
+png("figs/forplot1.death.png",width=8,height=7,units="cm",res=300)
+forplot(ctHR_death)
+dev.off()
+```
+
+```{r eval=F, echo=FALSE, message=FALSE}
+png("figs/forplot2.death.png",width=8,height=7,units="cm",res=300)
+forplot(ctHR_death)
+dev.off()
+```
+
+### Primary outcome
+```{r eval=F, echo=FALSE, message=FALSE}
+SBP_all <- datbp_all
+pts <- c(min(SBP_all$median),114,130,140,max(SBP_all$median))
+SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
+orglev <- levels(SBP_all$medianpar)
+# make 118-138 as reference group
+SBP_all <- within(SBP_all,medianpar<- relevel(medianpar,ref=2))
+ctHR <- subctHR(SBP_all,"PRIMARY","medianpar")
+ctHR$group <- factor(ctHR$group, levels=orglev)
+ctHR_primary <- ctHR[order(ctHR$group),]
+ctHR_primary$group <- c("<115 mmHg","115-130 mmHg", "131-140 mmHg",">140 mmHg")
+row.names(ctHR_primary) <- NULL
+pander(ctHR_primary[,1:5])
+```
+
+```{r eval=F, echo=FALSE, message=FALSE}
+png("figs/forplot1.primary.png",width=8,height=7,units="cm",res=300)
+forplot(ctHR_primary)
+dev.off()
+```
+
+```{r eval=F, echo=FALSE, message=FALSE}
+png("figs/forplot2.primary.png",width=8,height=7,units="cm",res=300)
+forplot(ctHR_primary)
+dev.off()
+```
