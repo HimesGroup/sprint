@@ -1,5 +1,6 @@
 ---
-title: 'Results for NEJM SPRINT Challenge'
+title: "An Ideal Systolic Blood Pressures Within 115-140mmHg Are Associated with Better Outcomes"
+subtitle: 'Results for NEJM SPRINT Challenge'
 author: "Himes Lab"
 date: Feb 14, 2017
 output:
@@ -29,7 +30,15 @@ library(ggfortify)
 options(width = 400)
 ```  
 
-## Data from SPRINT
+## Introduction
+
+### Summary
+
+SPRINT determined that treating individuals to have systolic blood pressure (SBP) near 120mmHg was better than 140mmHg. Although the average SBP of subjects within treatment groups differed, not all subjects had measures near their target. By grouping subjects according to actual SBP measures, rather than treatment group, we found that those with SBP >140mmHg were at increased risk for cardiovascular disease outcomes, while the risk of those with SBP 115-140mmHg was not substantially different.
+
+
+#### Original data from SPRINT Challenge 
+
 * Original information:
     + Baseline measurement for stuey participants: baseline.csv
     + Occurance of clinical outcomes during treatment: outcomes.csv
@@ -57,13 +66,15 @@ SBP_5yr <- read.csv("intermediate/SBP_5yr.csv")
 datbp_all <- merge(SBP_5yr,dat,by=c("MASKID"),all.x=TRUE)
 ```
 
+***
 
-## Replication results from NEJM paper
-
-### Figure2: SBP over the course of the trial
+## SBP measures over the course of the trial
 
 
-```{r eval=TRUE, echo=FALSE, message=FALSE}
+The mean SBP of subjects during the tial can be clearly separated after the treatment applied. The left figure is the replication of Figure 2 (Bars represent 95% CI). However, comparing with the standard deviation (SD) in the right figure (Bars represent SD), SBPs in each treatment group varied largely. Not all the subjects had near their targets.
+
+
+```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
 bptime <- bp
 bptime$INTENSIVE <- as.factor(bptime$INTENSIVE)
 levels(bptime$INTENSIVE) <- c("STANDARD","INTENSIVE")
@@ -71,43 +82,76 @@ setDT(bptime)
 bp_ct <- bptime[,list(mean=mean(SBP),sd=sd(SBP),n=length(SBP)),by=c("INTENSIVE","visitcode2")]
 bp_ct$error_norm <- qnorm(0.975)*bp_ct$sd/sqrt(bp_ct$n)
 bp_ct$error_t <- qt(0.975,df=bp_ct$n-1)*bp_ct$sd/sqrt(bp_ct$n)
-# plot
-plot <- ggplot(bp_ct,aes(x=visitcode2,y=mean,colour=INTENSIVE,group=INTENSIVE,fill=INTENSIVE))+geom_point()+geom_line()+geom_errorbar(aes(ymax=mean+error_norm, ymin=mean-error_norm), width=0.2) + scale_x_continuous(breaks=seq(0,60,6)) +scale_y_continuous(limits=c(110,150)) + xlab("Visit Month") + ylab("SBP") + theme(
+# plot 95% CI
+ggplot(bp_ct,aes(x=visitcode2,y=mean,colour=INTENSIVE,group=INTENSIVE,fill=INTENSIVE))+geom_point()+geom_line()+geom_errorbar(aes(ymax=mean+error_norm, ymin=mean-error_norm), width=0.2) + scale_x_continuous(limits=c(0,60),breaks=seq(0,60,12),labels=c(0:5)) +scale_y_continuous(limits=c(110,150)) + xlab("Years") + ylab("SBP (mmHg)") + theme(
   panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-  legend.position = "bottom",
+  legend.position = "bottom", legend.title=element_blank(),
   axis.line = element_line(colour = "black")
   )
-plot
+
+# plot SD
+ggplot(bp_ct,aes(x=visitcode2,y=mean,colour=INTENSIVE,group=INTENSIVE,fill=INTENSIVE))+geom_point()+geom_line()+geom_errorbar(aes(ymax=mean+sd, ymin=mean-sd), width=0.2) + scale_x_continuous(limits=c(0,60),breaks=seq(0,60,12),labels=c(0:5))  + xlab("Years") + ylab("SBP (mmHg)") + theme(
+  panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  legend.position = "bottom", legend.title=element_blank(),
+  axis.line = element_line(colour = "black")
+  ) 
 ```
+
+Therefore, we hypothesized a generalized ideal SBP target that patients could benefit regardless of the treatment.
+
+***
 
 ## Distribution of mean and median trial SBP
 
-```{r eval=TRUE, echo=FALSE, message=FALSE, fig.width=5,fig.height=4}
-ggplot(data=SBP_5yr,aes(x=mean))+ geom_histogram(aes(y=..density..),binwidth=5,colour="black",fill="white") + geom_density(alpha=.2, fill="#FF6666") + theme(legend.title=element_blank()) + xlab("Mean trial SBP") 
-ggplot(data=SBP_5yr,aes(x=median)) + geom_histogram(aes(y=..density..),binwidth=5,colour="black",fill="white") + geom_density(alpha=.2, fill="#FF6666") + theme(legend.title=element_blank()) + xlab("Median trial SBP") 
+The distributions of mean and median trial SBP are very close (Pearson's r=0.97). The two peaks are at 115-125 mmHg and 131-139 mmHg of in both measures. We chose to use all post-randomization SBP measures available for each individual to capture their SBP during the trial, as this value best reflects SBP from after treatment began until the last available observation and is robust to outlier measures
+
+```{r eval=FALSE, echo=FALSE, message=FALSE}
+# find peak of mean trial SBP
+hmean <- hist(SBP_5yr$mean,breaks=50)
+hmean <- data.frame(counts=hmean$counts,mids=hmean$mids)
+hmean <- hmean[order(hmean$counts,decreasing = TRUE),]
+# find peak of median trial SBP
+hmedian <- hist(SBP_5yr$median,breaks=50)
+hmedian <- data.frame(counts=hmedian$counts,mids=hmedian$mids)
+hmedian <- hmedian[order(hmedian$counts,decreasing = TRUE),]
 ```
 
-## Cox proportional hazard ratio of death and primary outcomes in spline models
+```{r eval=TRUE, echo=FALSE, message=FALSE, fig.width=4.5,fig.height=4}
+# mean trial SBP plot
+ggplot(data=SBP_5yr,aes(x=mean))+ geom_histogram(aes(y=..density..),binwidth=5,colour="black",fill="white") + geom_density(alpha=.2, fill="#FF6666") + scale_y_continuous(expand=c(0,0)) + xlab("Mean trial SBP") + theme(
+  panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  legend.position = "bottom", legend.title=element_blank(),
+  axis.line = element_line(colour = "black")
+  ) 
 
-### Death outcome
-```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=5,fig.height=4}
-fit <- coxph(Surv(T_DEATH,EVENT_DEATH)~pspline(median,df=4),data=datbp_all)
-termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1)
+# meadian trial SBP plot
+ggplot(data=SBP_5yr,aes(x=median)) + geom_histogram(aes(y=..density..),binwidth=5,colour="black",fill="white") + geom_density(alpha=.2, fill="#FF6666") + scale_y_continuous(expand=c(0,0)) + xlab("Median trial SBP") + theme(
+  panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  legend.position = "bottom", legend.title=element_blank(),
+  axis.line = element_line(colour = "black")
+  ) 
 ```
 
-### Primary outcome
-```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=5,fig.height=4}
+***
+
+## Splines-based hazard ratio for primary outcome and all-cause death
+
+
+Penalized splines (P-splines, Eilers and Marx) reflect the nature of continuous covariate effects in the additive Cox model.
+
+
+### splines-based HR curves
+
+```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
 fit <- coxph(Surv(T_PRIMARY,EVENT_PRIMARY)~pspline(median,df=4),data=datbp_all)
-termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1)
-```
-
-### Primary or death outcome
-```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=5,fig.height=4}
+termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1,main="Primary outcome")
+fit <- coxph(Surv(T_DEATH,EVENT_DEATH)~pspline(median,df=4),data=datbp_all)
+termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1,main="All-cause death")
 fit <- coxph(Surv(T_PRIMARYORDEATH,EVENT_PRIMARYORDEATH)~pspline(median,df=4),data=datbp_all)
-termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1)
+termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1,main="Primary outcome or death")
 ```
 
-## Cox proportional hazard ratio in SBP groups
+### Cox proportional HR in <115 mmHg, 115-140 mmHg, >140 mmHg groups
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
 ### Function used in this section ###
@@ -201,28 +245,9 @@ forplot <- function(dt){
 
 ```
 
-### Parition into three SBP groups <115 mmHg, 115-140 mmHg, >140 mmHg
-#### Death outcome
-```{r eval=T, echo=FALSE, message=FALSE}
-SBP_all <- datbp_all
-pts <- c(min(SBP_all$median),114,140,max(SBP_all$median))
-SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
-orglev <- levels(SBP_all$medianpar)
-# make the second group as reference group
-SBP_all <- within(SBP_all,medianpar<- relevel(medianpar,ref=2))
-ctHR <- subctHR(SBP_all,"DEATH","medianpar")
-ctHR$group <- factor(ctHR$group, levels=orglev)
-ctHR <- ctHR[order(ctHR$group),]
-ctHR$group <- c("<115 mmHg","115-140 mmHg",">140 mmHg")
-ctHR_death3 <- ctHR
-
-tb <- ctHR_death3
-row.names(tb) <- NULL
-colnames(tb) <- c("group","Event/Total(%)","Intensive arm/Total(%)","HR (95%CI)","P value")
-pander(tb[,1:5])
-```
 
 #### Primary outcome
+
 ```{r eval=T, echo=FALSE, message=FALSE}
 SBP_all <- datbp_all
 pts <- c(min(SBP_all$median),114,140,max(SBP_all$median))
@@ -242,12 +267,11 @@ colnames(tb) <- c("group","Event/Total(%)","Intensive arm/Total(%)","HR (95%CI)"
 pander(tb[,1:5])
 ```
 
+##### All-cause death
 
-### Parition into four SBP groups <115 mmHg, 115-130 mmHg, 130  >140 mmHg
-#### Death outcome
-```{r eval=TRUE, echo=FALSE, message=FALSE}
+```{r eval=T, echo=FALSE, message=FALSE}
 SBP_all <- datbp_all
-pts <- c(min(SBP_all$median),114,130,140,max(SBP_all$median))
+pts <- c(min(SBP_all$median),114,140,max(SBP_all$median))
 SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
 orglev <- levels(SBP_all$medianpar)
 # make the second group as reference group
@@ -255,16 +279,20 @@ SBP_all <- within(SBP_all,medianpar<- relevel(medianpar,ref=2))
 ctHR <- subctHR(SBP_all,"DEATH","medianpar")
 ctHR$group <- factor(ctHR$group, levels=orglev)
 ctHR <- ctHR[order(ctHR$group),]
-ctHR$group <- c("<115 mmHg","115-130 mmHg", "131-140 mmHg",">140 mmHg")
-ctHR_death4 <- ctHR
+ctHR$group <- c("<115 mmHg","115-140 mmHg",">140 mmHg")
+ctHR_death3 <- ctHR
 
-tb <- ctHR_death4
+tb <- ctHR_death3
 row.names(tb) <- NULL
 colnames(tb) <- c("group","Event/Total(%)","Intensive arm/Total(%)","HR (95%CI)","P value")
 pander(tb[,1:5])
 ```
 
+
+### Cox proportional HR in <115 mmHg, 115-130 mmHg, 131-140 mmHg and  >140 mmHg groups
+
 #### Primary outcome
+
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
 SBP_all <- datbp_all
 pts <- c(min(SBP_all$median),114,130,140,max(SBP_all$median))
@@ -284,45 +312,45 @@ colnames(tb) <- c("group","Event/Total(%)","Intensive arm/Total(%)","HR (95%CI)"
 pander(tb[,1:5])
 ```
 
-## Cumulative hazard proportion
-### Death outcome
-```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=5,fig.height=4}
-SBP_all <- datbp_all
-pts <- c(min(SBP_all$median),114,140,max(SBP_all$median))
-SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
-fit <- survfit(Surv(T_DEATH,EVENT_DEATH)~medianpar,data=SBP_all)
+#### Death outcome
 
-# NOTE: "#F8766D" (red) "#00BA38" (green)  "#619CFF" (blue)
-plot <- autoplot(fit,fun="event",conf.int.fill=NULL, surv.linetype=1,surv.size=0.5,censor=FALSE,xlim=c(0,1825)) + xlab("Years") + ylab("Cumulative hazard") + scale_x_continuous(expand=c(0,0),limits=c(0,1900),breaks=c(365,730,1095,1460,1825),labels=c(1:5)) +
-  scale_y_continuous(expand=c(0,0),limits=c(0,0.13),breaks=seq(0,0.12,0.02)) +
-  theme(
-  panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-  axis.line = element_line(colour = "black"),
-  legend.title=element_blank(),legend.position="none"
-  #axis.title=element_text(size=8.5),
-  #axis.text=element_text(size=8),
-  #axis.ticks=element_line(size=0.5)
-  ) + 
-  annotate("text", x=1600, y=0.067, label= "<115 mmHg", color="#619CFF") +
-  annotate("text", x=1570, y=0.03, label= "115-140 mmHg", color="#F8766D") +
-  annotate("text", x=1600, y=0.12, label= ">140 mmHg", color="#00BA38")
-plot
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+SBP_all <- datbp_all
+pts <- c(min(SBP_all$median),114,130,140,max(SBP_all$median))
+SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
+orglev <- levels(SBP_all$medianpar)
+# make the second group as reference group
+SBP_all <- within(SBP_all,medianpar<- relevel(medianpar,ref=2))
+ctHR <- subctHR(SBP_all,"DEATH","medianpar")
+ctHR$group <- factor(ctHR$group, levels=orglev)
+ctHR <- ctHR[order(ctHR$group),]
+ctHR$group <- c("<115 mmHg","115-130 mmHg", "131-140 mmHg",">140 mmHg")
+ctHR_death4 <- ctHR
+
+tb <- ctHR_death4
+row.names(tb) <- NULL
+colnames(tb) <- c("group","Event/Total(%)","Intensive arm/Total(%)","HR (95%CI)","P value")
+pander(tb[,1:5])
 ```
 
-### Primary outcome
-```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=5,fig.height=4}
+
+### Cumulative hazard proportion for primary and all-cause death
+
+```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
 SBP_all <- datbp_all
 pts <- c(min(SBP_all$median),114,140,max(SBP_all$median))
 SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
-fit <- survfit(Surv(T_PRIMARY,EVENT_PRIMARY)~medianpar,data=SBP_all)
 
+# Primary outcome
 # NOTE: "#F8766D" (red) "#00BA38" (green)  "#619CFF" (blue)
-plot <- autoplot(fit,fun="event",conf.int.fill=NULL, surv.linetype=1,surv.size=0.5,censor=FALSE,xlim=c(0,1825)) + xlab("Years") + ylab("Cumulative hazard") + scale_x_continuous(expand=c(0,0),limits=c(0,1900),breaks=c(365,730,1095,1460,1825),labels=c(1:5)) +
+fit <- survfit(Surv(T_PRIMARY,EVENT_PRIMARY)~medianpar,data=SBP_all)
+autoplot(fit,fun="event",conf.int.fill=NULL, surv.linetype=1,surv.size=0.5,censor=FALSE,xlim=c(0,1825))  + ggtitle("Cumulative hazards for primary outcome") + xlab("Years") + ylab("Cumulative hazard") + scale_x_continuous(expand=c(0,0),limits=c(0,1900),breaks=c(365,730,1095,1460,1825),labels=c(1:5)) +
   scale_y_continuous(expand=c(0,0),limits=c(0,0.13),breaks=seq(0,0.12,0.02)) +
   theme(
   panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
   axis.line = element_line(colour = "black"),
-  legend.title=element_blank(),legend.position="none"
+  legend.title=element_blank(),legend.position="none",
+  plot.title = element_text(hjust = 0.5)
   #axis.title=element_text(size=8.5),
   #axis.text=element_text(size=8),
   #axis.ticks=element_line(size=0.5)
@@ -330,11 +358,28 @@ plot <- autoplot(fit,fun="event",conf.int.fill=NULL, surv.linetype=1,surv.size=0
   annotate("text", x=1600, y=0.053, label= "<115 mmHg", color="#619CFF") +
   annotate("text", x=1570, y=0.080, label= "115-140 mmHg", color="#F8766D") +
   annotate("text", x=1600, y=0.110, label= ">140 mmHg", color="#00BA38")
-plot
+
+# All-cause death
+fit <- survfit(Surv(T_DEATH,EVENT_DEATH)~medianpar,data=SBP_all)
+autoplot(fit,fun="event",conf.int.fill=NULL, surv.linetype=1,surv.size=0.5,censor=FALSE,xlim=c(0,1825)) + ggtitle("Cumulative hazards for all-cause death") + xlab("Years") + ylab("Cumulative hazard") + scale_x_continuous(expand=c(0,0),limits=c(0,1900),breaks=c(365,730,1095,1460,1825),labels=c(1:5)) +
+  scale_y_continuous(expand=c(0,0),limits=c(0,0.13),breaks=seq(0,0.12,0.02)) +
+  theme(
+  panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  axis.line = element_line(colour = "black"),
+  legend.title=element_blank(),legend.position="none",
+  plot.title = element_text(hjust = 0.5)
+  #axis.title=element_text(size=8.5),
+  #axis.text=element_text(size=8),
+  #axis.ticks=element_line(size=0.5)
+  ) + 
+  annotate("text", x=1600, y=0.067, label= "<115 mmHg", color="#619CFF") +
+  annotate("text", x=1570, y=0.03, label= "115-140 mmHg", color="#F8766D") +
+  annotate("text", x=1600, y=0.12, label= ">140 mmHg", color="#00BA38")
 ```
 
+***
 
-## Cox proportional hazard ratio of SAEs in spline model
+## Splines-based hazard ratio for SAE
 
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
@@ -357,10 +402,14 @@ spSAEplot <- function(dt,x,covars,main) {
 ```
 
 
-### Total SAE
+### Total SEA
+
+#### Splines-based HR curves on total SAEs
 ```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=5,fig.height=4}
-spSAEplot(SBP_all,"SAE","median",main="")
+spSAEplot(SBP_all,"SAE","median",main="Total SAE")
 ```
+
+#### Cox proportional HR in <115 mmHg, 115-140 mmHg, and >140 mmHg groups
 
 Use the <115 mmHg, 115-140 mmHg and 140 mmHg as partition groups
 
@@ -382,8 +431,13 @@ row.names(tb) <- NULL
 colnames(tb) <- c("group","Event/Total(%)","Intensive arm/Total(%)","HR (95%CI)","P value")
 pander(tb[,1:5])
 ```
-### Other SAEs
-```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=5,fig.height=4}
+
+
+### Splines-based HR curves on other SAEs
+
+ER represents emergency room visit
+
+```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
 x <- c("REL_SAE", "HYP_SAE", "SYN_SAE", "BRA_SAE", "ELE_SAE", "INJ_SAE", "AKI_SAE", "HYP_ERS", "SYN_ERS", "BRA_ERS", "ELE_ERS","INJ_ERS", "AKI_ERS", "LON_MCE", "HIN_MCE", "LOK_MCE", "HIK_MCE", "ALO_OHO", "WDZ_OHO")
 names <- c("RelatedSAE","Hypotension","Syncope","Bradycardia","ElectrolyteAbnormality","InjuriousFall","AcuteKindeyInjuryORRentalFailure","Hypotension_ER","Syncope_ER","Bradycardia_ER","ElectrolyteAbnormality_ER","InjuriousFall_ER","AcuteKindeyInjuryORRentalFailure_ER","LowSodium","HighSodium","LowPotassium","HighPotassium","OrthostaticHypotensionNODizziness","OrthostaticHypotensionWithDizziness")
 for (i in 1:length(x)) {
