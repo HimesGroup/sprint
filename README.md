@@ -1,6 +1,7 @@
 sprint
 ======
 Results for [NEJM SPRINT Challenge](https://challenge.nejm.org/pages/home)
+
 Authors: Mengyuan Kan, Blanca E Himes
 
 ### Lay Summary
