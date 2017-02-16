@@ -1,6 +1,6 @@
 sprint
 ======
-Results for [NEJM SPRINT Challenge](https://challenge.nejm.org/pages/home)
+This repository contains code used to obtain our [NEJM SPRINT Challenge](https://challenge.nejm.org/posts/5975) results, as well as an extended report with additional results and details.
 
 Authors: Mengyuan Kan, Edward Zhao, Brett Beaulieu-Jones, Blanca E Himes
 
