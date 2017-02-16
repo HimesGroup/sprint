@@ -26,9 +26,9 @@ Because most of the standard vs. intensive treatment subjects who were close to 
 
 ### Description of files in repository 
 
-SPRINTresults.rmd: An R markdown report that includes code that can be used to reproduce our results. To run the script, it should be under a sprint\_pop directory, otherwise an absolute path should be given. You will have to get the SPRINT dataset in order to run it, which requires a formal application to the NHLBI's [BioLINCC](https://biolincc.nhlbi.nih.gov/home/).
+`SPRINTresults.rmd`: An R markdown report that includes code that can be used to reproduce our results. To run the script, it should be under a sprint\_pop directory, otherwise an absolute path should be given. You will have to get the SPRINT dataset in order to run it, which requires a formal application to the NHLBI's [BioLINCC](https://biolincc.nhlbi.nih.gov/home/).
 
-SPRINTresults.html: An html file corresponding to SPRINTresults.rmd. It can be downloaded to see a full report of our results that includes more details than those contained in the SPRINT abstract.
+`SPRINTresults.html`: An html file corresponding to SPRINTresults.rmd. It can be downloaded to see a full report of our results that includes more details than those contained in the SPRINT abstract.
 
 ### Acknowledgements
 Thank you to Ryan Urbanowicz, Casey Greene, Rebecca Hubbard, and Jason Moore for productive discussions related to this project.
