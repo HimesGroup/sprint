@@ -19,14 +19,14 @@ Cumulative hazards for the primary outcome computed according to these partition
 
 Because most of the standard vs. intensive treatment subjects who were close to their target SBP were within the 115-140 mmHg group, we repeated the cumulative hazards computations with an additional partition of this group into median trial SBPs 115-130 and 131-140 mmHg. Relative to the 115-130mmHg group, the hazard ratios for the primary outcome and all-cause death were not significantly different for the \<115 or 131-140 mmHg groups. The \>140mmHg group continued to have elevated risk, and relative to the 115-130mmHg group, had a hazard ratio of 1.84 (95% CI 1.40-2.41; 1.1x10-5) for the primary outcome and 2.32 (95% CI 1.68-3.19; 2.5x10-7) for all-cause death.
 
-
+**Figure 1.**
 ![](<./figs/Figure.png>)
 
 **Conclusion.** Subjects whose median trial SBP was within 115-140mmHg had nearly the same primary outcome and all-cause death rates, while those with medial trial SBP >140mmHg had higher rates of events. Thus, while SPRINT suggests that an SBP target of 120mmHg was better than 140mmHg, a target greater than 120mmHg may be just as beneficial while requiring fewer medications.
 
-### File description
+### Description of files in repository 
 
-SPRINTresults.rmd: An R markdown report that includes code that can be used to reproduce our results. To run the script, it should be under a sprint\_pop directory, otherwise an absolute path should be given. You will have to get the SPRINT dataset in order to run it, which requires a formal application to the NHLBI's [BioLINCC](https://biolincc.nhlbi.nih.gov/home/)
+SPRINTresults.rmd: An R markdown report that includes code that can be used to reproduce our results. To run the script, it should be under a sprint\_pop directory, otherwise an absolute path should be given. You will have to get the SPRINT dataset in order to run it, which requires a formal application to the NHLBI's [BioLINCC](https://biolincc.nhlbi.nih.gov/home/).
 
 SPRINTresults.html: An html file corresponding to SPRINTresults.rmd. It can be downloaded to see a full report of our results that includes more details than those contained in the SPRINT abstract.
 
