@@ -1,5 +1,5 @@
 ---
-title: "An Ideal Systolic Blood Pressures Within 115-140mmHg Are Associated with Better Outcomes"
+title: "Target Systolic Blood Pressures Within 115-140mmHg Have Significantly Better Outcomes Than Systolic Blood Pressures >140mmHg"
 subtitle: 'Results for NEJM SPRINT Challenge'
 author: "Himes Lab"
 date: Feb 14, 2017
@@ -16,13 +16,14 @@ output:
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE,warning=FALSE}
 ### load library ###
+library(knitr)
 library(ggplot2)
 library(pander)
-library(reshape2)
 library(data.table)
 library(survival)
 library(forestplot)
 library(ggfortify)
+library(survey)
 ```
 
 
@@ -39,11 +40,10 @@ SPRINT determined that treating individuals to have systolic blood pressure (SBP
 
 #### Original data from SPRINT Challenge 
 
-* Original information:
-    + Baseline measurement for stuey participants: baseline.csv
-    + Occurance of clinical outcomes during treatment: outcomes.csv
-    + Occurance of serious adverse events during treatment: safety.csv
-    + Blood pressure measured in each visit points duringn clinical trial course: bp.csv
+* Baseline measurement for stuey participants: baseline.csv
+* Occurance of clinical outcomes during treatment: outcomes.csv
+* Occurance of serious adverse events during treatment: safety.csv
+* Blood pressure measured in each visit points duringn clinical trial course: bp.csv
     
 ```{r eval=F, echo=FALSE, message=FALSE}
 baseline <- read.csv("data/baseline.csv") # study participants
@@ -71,7 +71,7 @@ datbp_all <- merge(SBP_5yr,dat,by=c("MASKID"),all.x=TRUE)
 ## SBP measures over the course of the trial
 
 
-The mean SBP of subjects during the tial can be clearly separated after the treatment applied. The left figure is the replication of Figure 2 (Bars represent 95% CI). However, comparing with the standard deviation (SD) in the right figure (Bars represent SD), SBPs in each treatment group varied largely. Not all the subjects had near their targets.
+The mean SBP of subjects during the trial is clearly different randomization. The left figure is the replication of [NEJM paper](http://www.nejm.org/doi/full/10.1056/NEJMoa1511939#t=article]) Figure 2 (Bars represent 95% CI). However, comparing with the right figure, where bars represent the standard deviation (SD), SBPs within each treatment group varied largely, and not all the subjects had SBP measures near their targets.
 
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
@@ -97,13 +97,13 @@ ggplot(bp_ct,aes(x=visitcode2,y=mean,colour=INTENSIVE,group=INTENSIVE,fill=INTEN
   ) 
 ```
 
-Therefore, we hypothesized a generalized ideal SBP target that patients could benefit regardless of the treatment.
+Therefore, our goal was to determine whether an ideal SBP target could be identified, not according to the SPRINT study arms, but by grouping subjects according to their actual SBP measures obtained during the trial.
 
 ***
 
 ## Distribution of mean and median trial SBP
 
-The distributions of mean and median trial SBP are very close (Pearson's r=0.97). The two peaks are at 115-125 mmHg and 131-139 mmHg of in both measures. We chose to use all post-randomization SBP measures available for each individual to capture their SBP during the trial, as this value best reflects SBP from after treatment began until the last available observation and is robust to outlier measures
+The distributions of mean and median trial SBP are very close (Pearson's r=0.97), and both had peaks at 115-125 mmHg and 131-139 mmHg as shown below. We chose to use all post-randomization SBP measures available for each individual to capture their SBP during the trial, as this value best reflects SBP from after treatment began until the last available observation and is robust to outlier measures
 
 ```{r eval=FALSE, echo=FALSE, message=FALSE}
 # find peak of mean trial SBP
@@ -136,11 +136,13 @@ ggplot(data=SBP_5yr,aes(x=median)) + geom_histogram(aes(y=..density..),binwidth=
 
 ## Splines-based hazard ratio for primary outcome and all-cause death
 
-
-Penalized splines (P-splines, Eilers and Marx) reflect the nature of continuous covariate effects in the additive Cox model.
-
+As outcome variables, we used the trial's primary outcome variable and all-cause death. Penalized smoothing splines were obtained to assess variability in hazard ratios for each outcome vs. median trial SBP.
 
 ### splines-based HR curves
+
+To evaluate possible nonlinear effects of median trial SBP on the course of the clinical outcomes, penalized splines (P-splines, Eilers and Marx) were used that reflect the nature of continuous covariate effects in the additive Cox model. For primary outcome, the smoothed curve showed that LogHR increases slowly up to about 140 mmHg and increases sharply up to about 180 mmHg. While for all-cause death, although the estimates were subject to more error for median trial SBP less than 115 mmHg, logHR decreases sharply to 115 mmHg and increases slowly from 115 mmHg to 140 mmHg, and then dramaticly increases to 180 mmHg. For primary or death outcome, the curve showed the mixed effects of primary outcome and all-cause death.
+
+
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
 fit <- coxph(Surv(T_PRIMARY,EVENT_PRIMARY)~pspline(median,df=4),data=datbp_all)
@@ -151,7 +153,10 @@ fit <- coxph(Surv(T_PRIMARYORDEATH,EVENT_PRIMARYORDEATH)~pspline(median,df=4),da
 termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1,main="Primary outcome or death")
 ```
 
-### Cox proportional HR in <115 mmHg, 115-140 mmHg, >140 mmHg groups
+### Cox proportional HR in <115 mmHg, 115-140 mmHg and >140 mmHg groups
+
+Cox proportional HRs for the primary outcome and all-cause death were computed according to the partitions observed from the curves, which are <115 mmHg, 115-140 mmHg and > 140 mmHg. Because of the lowest risk in 115-140 mmHg, this group was chosen as a reference group. Relative to the 115-130 mmHg group, the HRs for the primary outcome and all-cause death were not significantly different for the <115 or 131-140 mmHg groups. The >140mmHg group continued to have elevated risk, and relative to the 115-130mmHg group, had a hazard ratio of 1.84 (95% CI 1.40-2.41; p-value 1.1x10-5) for the primary outcome and 2.32 (95% CI 1.68-3.19; p-value 2.5x10-7) for all-cause death. For all-cause death, the HR in <115 mmHg group is slightly higer than 115-140 mmHg group despite of insignificant difference. 
+
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
 ### Function used in this section ###
@@ -193,7 +198,8 @@ subctHR <- function(dt,x,covars) { # x: event name. Will add "EVENT_" for event 
   out <- data.frame(group=refname,sample,intensive_arm=sampintarm,HR.CI,pval,HR,upperCI,lowerCI)
   for (i in 1:length(invar_names)) {
     sub_coef <- res$coefficients[i,]
-    pval <- unname(sub_coef[5])
+    #pval <- unname(sub_coef[5])
+    pval <- ifelse(unname(sub_coef[5])>=0.01,round(unname(sub_coef[5]),2),format(unname(sub_coef[5]),digits=3))
     sub_conf <- res$conf.int[i,]
     HR <- unname(sub_conf[1])
     lowerCI <- unname(sub_conf[3])
@@ -212,37 +218,26 @@ subctHR <- function(dt,x,covars) { # x: event name. Will add "EVENT_" for event 
     sampintarm <- paste0(nintarm,"/",ntotal,"(",propintarm,")")
     out <- rbind(out,data.frame(group,sample,intensive_arm=sampintarm,HR.CI,pval,HR,upperCI,lowerCI))
   }
-  out$pval <- ifelse(out$pval>=0.01,round(out$pval,2),format(out$pval,digits=3))
+  #out$pval <- ifelse(out$pval>=0.01,round(out$pval,2),format(out$pval,digits=3))
   return(out)
 }
 ```
 
-```{r eval=TRUE, echo=FALSE, message=FALSE}
-forplot <- function(dt){
+```{r eval=F, echo=FALSE, message=FALSE}
+### Function used in this section ###
+forplot <- function(dt,event){
   if ("HR"%in%names(dt)) {risk <- "HR"} else if ("OR"%in%names(dt)) {risk <- "OR"}
-  riskcomb <- paste0(risk,".CI")
-  ctplot <- dt[,c("group","sample","intensive_arm",riskcomb)]
-  names(ctplot)[3] <- "riskcomb"
-  HRplot <- dt[,c(risk,"upperCI","lowerCI")]
+  riskCI <- paste0(risk,".CI")
+  ctplot <- dt[,c("group",riskCI)]
   ctplot[,names(ctplot)] <- sapply(ctplot[, names(ctplot)], as.character)
-  rowname1 <- c(group=" ",sample="Event/Total",pval="Intensive arm/Total",riskcomb=" ")
-  rowname2 <- c(group="Group",sample="Counts(%)",pval="Counts(%)",riskcomb=paste0(risk,"(95% CI)"))
-  data1 <- rbind(rowname2,ctplot)
-  ctplot <- rbind(rowname1,data1)
-  ctplot <- ctplot[,c(1,4)] # 0.5
-  #ctplot <- ctplot[,2:4] # 0.3
-  m <- c(NA,NA,round(HRplot[,1],2))
-  l <- c(NA,NA,round(HRplot$lowerCI,2))
-  u <- c(NA,NA,round(HRplot$upperCI,2))
-  min <- min(l,na.rm=TRUE)
-  max <- max(u,na.rm=TRUE)
-  # assign the ticks for x-axis, or will get into trouble
-  if(floor(min)==0){start=0.5}else{start=floor(min)}
-  if(ceiling(max)>=2.5){end=2.5}else{end=ceiling(max)}
-  #plot <- forestplot(ctplot,m,l,u,clip=c(0.5,2.5),xlog=TRUE,graphwidth=unit(c(0.15,0),"npc"),xticks = seq(start,end,by=0.5),txt_gp=fpTxtGp(label=list(gpar(cex=0.7)),ticks = gpar(cex=0.7)),new_page=FALSE,boxsize=0.15) # graphwidth (range for CI, 1-start point for CI), ,graphwidth=unit(c(0.35,0),"npc"); colgap (gap between texttable and plot; width range of plot) ,colgap=unit(c(0,0.2),"npc")
-  plot <- forestplot(ctplot,m,l,u,clip=c(0.5,2.5),xlog=TRUE,graphwidth=unit(c(0.5,0),"npc"),xticks = c(0.75,1,2,3,4),txt_gp=fpTxtGp(label=list(gpar(cex=0.5)),ticks = gpar(cex=0.5)),boxsize=0.12)
+  rowname <- c(group="",HR=event)
+  rowname <- c(group="Group",HR="HR (95%CI)")
+  ctplot <- rbind(rowname,ctplot)
+  m <- c(NA,NA,round(dt[,risk]))
+  l <- c(NA,NA,round(dt[,"lowerCI"],2))
+  u <- c(NA,NA,round(dt[,"upperCI"],2)) 
+  plot <- forestplot(ctplot,m,l,u,xlog=TRUE,graphwidth=unit(c(0.5,0),"npc"),xticks = c(0.75,1,2,3,4),txt_gp=fpTxtGp(label=list(gpar(cex=0.5)),ticks = gpar(cex=0.5)),boxsize=0.12)
 }
-
 ```
 
 
@@ -291,6 +286,9 @@ pander(tb[,1:5])
 
 ### Cox proportional HR in <115 mmHg, 115-130 mmHg, 131-140 mmHg and  >140 mmHg groups
 
+Because most of the standard vs. intensive treatment subjects who were close to their target SBP were within the 115-140 mmHg group, we repeated the cumulative hazards computations with an additional partition of this group into median trial SBPs 115-130 and 131-140 mmHg. Relative to the 115-130mmHg group, the hazard ratios for the primary outcome and all-cause death were not significantly different for the <115 or 131-140 mmHg groups. The >140mmHg group continued to have elevated risk, and relative to the 115-130mmHg group, had a hazard ratio of 1.84 (95% CI 1.40-2.41; p-value 1.1x10-5) for the primary outcome and 2.32 (95% CI 1.68-3.19; p-value 2.5x10-7) for all-cause death.
+
+
 #### Primary outcome
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
@@ -336,6 +334,9 @@ pander(tb[,1:5])
 
 ### Cumulative hazard proportion for primary and all-cause death
 
+Cumulative hazard proportion was plotted for <115 mmHg, 115-140 mmHg and >140 mmHg. The separation in primary outcome between >140 mmHg group and the other two groups were apparent at 1 year, and in all-cause death became apparent at 2 years, indicating the difference in cumulative hazards in >140 mmHg compared with the other two groups.
+
+
 ```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
 SBP_all <- datbp_all
 pts <- c(min(SBP_all$median),114,140,max(SBP_all$median))
@@ -379,8 +380,9 @@ autoplot(fit,fun="event",conf.int.fill=NULL, surv.linetype=1,surv.size=0.5,censo
 
 ***
 
-## Splines-based hazard ratio for SAE
+## Splines-based hazard ratio for serious adverse events (SAEs)
 
+From Table 3 of [NEJM paper](http://www.nejm.org/doi/full/10.1056/NEJMoa1511939#t=article]), the rate of total SAEs in participants in the intensive treatment is significantly higher than that in the standard treatment. We also plotted the smooth spline curves for various SAEs and  evaluated variability in HRs for total SAEs vs median trial SBP.
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
 spSAEplot <- function(dt,x,covars,main) {
@@ -402,16 +404,21 @@ spSAEplot <- function(dt,x,covars,main) {
 ```
 
 
-### Total SEA
+### Splines-based HR curves on total SAE
 
-#### Splines-based HR curves on total SAEs
+The curve below shows that overall, the rate of total SAEs did not vary too much within 115-140 although there was a slight increase near 130 mmHg.
+
 ```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=5,fig.height=4}
 spSAEplot(SBP_all,"SAE","median",main="Total SAE")
 ```
 
-#### Cox proportional HR in <115 mmHg, 115-140 mmHg, and >140 mmHg groups
 
-Use the <115 mmHg, 115-140 mmHg and 140 mmHg as partition groups
+We computed proportional HRs for SAEs versis median trial SBP groups using the same partitions as for primary outcome or all-cause death outcome.
+
+
+### Cox proportional HRs in <115 mmHg, 115-140 mmHg, and >140 mmHg groups
+
+Relative to 115-140 mmHg group, >140 mmHg group had a significant higher rate of SAE outcome.
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
 SBP_all <- datbp_all
@@ -433,11 +440,34 @@ pander(tb[,1:5])
 ```
 
 
+### Cox proportional HRs in <115 mmHg, 115-130 mmHg, 131-140 mmHg and >140 mmHg groups
+
+Similarly, relative to 115-130 mmHg group, >140 mmHg group had a significant higher rate of SAE outcome. However, 131-140 mmHg group had a lower rate of SAE outcome which could reflect as a local minimum at 140 mmHg in the smoothed curve.
+
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+SBP_all <- datbp_all
+pts <- c(min(SBP_all$median),114, 130, 140,max(SBP_all$median))
+SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
+orglev <- levels(SBP_all$medianpar)
+# make the second group as reference group
+SBP_all <- within(SBP_all,medianpar<- relevel(medianpar,ref=2))
+ctHR <- subctHR(SBP_all,"SAE","medianpar")
+ctHR$group <- factor(ctHR$group, levels=orglev)
+ctHR <- ctHR[order(ctHR$group),]
+ctHR$group <- c("<115 mmHg","115-130 mmHg", "131-140 mmHg",">140 mmHg")
+ctHR_SAE4 <- ctHR
+
+tb <- ctHR_SAE4
+row.names(tb) <- NULL
+colnames(tb) <- c("group","Event/Total(%)","Intensive arm/Total(%)","HR (95%CI)","P value")
+pander(tb[,1:5])
+```
+
 ### Splines-based HR curves on other SAEs
 
-ER represents emergency room visit
+The curves in the plots below (ER represents emergency room visit) for specific SAEs were different than that for total SAE, as expected based on their different nature. For example, it is not surprising that risk of hypotension increased with the decrease in SBPs.
 
-```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
+```{r eval=TRUE, echo=FALSE, message=FALSE, fig.width=4.5, fig.height=4}
 x <- c("REL_SAE", "HYP_SAE", "SYN_SAE", "BRA_SAE", "ELE_SAE", "INJ_SAE", "AKI_SAE", "HYP_ERS", "SYN_ERS", "BRA_ERS", "ELE_ERS","INJ_ERS", "AKI_ERS", "LON_MCE", "HIN_MCE", "LOK_MCE", "HIK_MCE", "ALO_OHO", "WDZ_OHO")
 names <- c("RelatedSAE","Hypotension","Syncope","Bradycardia","ElectrolyteAbnormality","InjuriousFall","AcuteKindeyInjuryORRentalFailure","Hypotension_ER","Syncope_ER","Bradycardia_ER","ElectrolyteAbnormality_ER","InjuriousFall_ER","AcuteKindeyInjuryORRentalFailure_ER","LowSodium","HighSodium","LowPotassium","HighPotassium","OrthostaticHypotensionNODizziness","OrthostaticHypotensionWithDizziness")
 for (i in 1:length(x)) {
@@ -445,3 +475,204 @@ for (i in 1:length(x)) {
 }
 ```
 
+
+## Spline-based SBP associations with CVD risk in NHANES
+
+To assess whether ideal SBP differed over a wider range of values and to other age groups, we used 2007-2014 data from the [National Health and Nutrition Examination Survey (NHANES)](https://www.cdc.gov/nchs/nhanes/), a cross-sectional study that includes extensive in-person interviews and physical exams. We created a composite cardiovascular disease (CVD) outcome by assigning case status to subjects who had congestive heart failure, coronary heart disease, angina, heart attack, and or stroke, and control status to those who did not have any of those outcomes. 
+
+
+2007-2014 NHANSE data were downloaded and cleaned using R codes from NHANSE_SPRINT.rmd. There are 23,482 adults 20 years old or greater, with 10,704 participants 50 years old or greater and 3,719 at age of 40-50 years old. Among senior adults 50 years or greater, 2,255 are diabetic and 8,085 are non-diabetic.
+
+
+
+```{r eval=TRUE, warning=FALSE,echo=FALSE, message=FALSE, results="hide"}
+### Read in NHANES Data ###
+datax <- read.csv("intermediate/NHANES.csv")
+datax$SBP <- round(datax$SBP)
+datax$WTMEC8YR = 1/4 * datax$WTMEC2YR
+datax <- within(datax,CVD <- relevel(CVD,ref=2)) # non-CVD as a reference group
+```
+
+
+### Splines-based OR curves
+
+```{r eval=TRUE, warning=FALSE,echo=FALSE, message=FALSE}
+library(splines)
+```
+
+In senior participants 50 years old or greater (the left figure), the smoothed curve showed logOR decreases sharply to 120 mmHg and then slowly increased. In the relatively younger participants 40-50 years old (the right figure), the logOR decreases sharply to 115 mmHg but increased sharply.
+
+
+```{r eval=TRUE, warning=FALSE,echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
+SBP_all <- datax
+SBP_all <- SBP_all[!is.na(SBP_all$SBP),]
+SBP_all_50 <- SBP_all[which(SBP_all$RIDAGEYR>=50),] # senior people
+glm <- glm(CVD~ns(SBP,4),data=SBP_all_50,family="quasibinomial")
+termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="median trial SBP", ylabs="log(OR)",main="participants >= 50 yr of age")
+
+
+SBP_all <- datax
+SBP_all <- SBP_all[!is.na(SBP_all$SBP),]
+SBP_all_40 <- SBP_all[which(SBP_all$RIDAGEYR>=40&SBP_all$RIDAGEYR<50),] # younger people
+glm <- glm(CVD~ns(SBP,4),data=SBP_all_40,family="quasibinomial")
+termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="median trial SBP", ylabs="log(OR)",main="participants 40-50 yr of age")
+```
+
+As SPRINT only included senior and nondiabetic participants while NHANES contains both nondiabetic and diabetic participants, we evaluated CVD risk in non-diabetic and diabetic participants separatedly. In both senior nondiabetic (the left figure) and diabetic participants (the right figure), the lowest logOR was shown at 120 mmHg, while in nondiabetic participants the curve decreased sharply in the region of SBP <120 mmHg compared to that in diabetic participants.
+
+
+```{r eval=TRUE, warning=FALSE,echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
+SBP_all <- datax
+SBP_all <- SBP_all[!is.na(SBP_all$SBP),]
+SBP_all_nd <- SBP_all[which((SBP_all$DIQ010==2)&(SBP_all$RIDAGEYR>=50)),] # senior nondiabetics N=6158
+glm <- glm(CVD~ns(SBP,4),data=SBP_all_nd,family="quasibinomial")
+termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="median trial SBP", ylabs="log(OR)",main="Nondiabetic participants >= 50 yr of age")
+
+
+SBP_all <- datax
+SBP_all <- SBP_all[!is.na(SBP_all$SBP),]
+SBP_all_d <- SBP_all[which((SBP_all$DIQ010==1)&(SBP_all$RIDAGEYR>=50)),] # senior diabetics
+glm <- glm(CVD~ns(SBP,4),data=SBP_all_d,family="quasibinomial")
+termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="median trial SBP", ylabs="log(OR)",main="Diabetic participants >= 50 yr of age")
+```
+
+
+### ORs in <115 mmHg, 115-130 mmHg, 131-140 mmHg and >140 mmHg groups
+
+```{r eval=T, warning=FALSE,echo=FALSE, message=FALSE, results="hide"}
+### Function used in this section ###
+subctOR <- function(dt,res,event,invar) {
+  # create reference variable
+  refname <- levels(dt[,invar])[1]
+  OR.CI <- 1
+  pval<- NA
+  OR <- 1
+  upperCI <- 1
+  lowerCI <- 1
+  ct <- dt[which(dt[,invar]==refname),c(event)]
+  nevent <- length(ct[!is.na(ct)][-grep("no",ct[!is.na(ct)])])
+  ntotal <- length(ct[!is.na(ct)])
+  prop <- round(nevent/ntotal*100,2)
+  sample <- paste0(nevent,"/",ntotal,"(",prop,")")
+  out <- data.frame(group=refname,sample,OR.CI,pval,OR,upperCI,lowerCI)
+  for (i in grep(invar,names(rega$coefficients))) {
+    OR <-  unname(exp(coef(res)[i]))
+    pval <- unname(summary(res)$coefficients[i,][4])
+    lowerCI <- unname(exp(confint(res)[i,][1]))
+    upperCI <- unname(exp(confint(res)[i,][2]))
+    OR.CI <- paste0(round(OR,2),"(",round(lowerCI,2),"-",round(upperCI,2),")")
+    group <- levels(dt[,invar])[i]
+    # count number in each subgroups
+    ct <- dt[which(dt[,invar]==group),c(event)]
+    nevent <- length(ct[!is.na(ct)][-grep("no",ct[!is.na(ct)])])
+    ntotal <- length(ct[!is.na(ct)])
+    prop <- round(nevent/ntotal*100,2)
+    sample <- paste0(nevent,"/",ntotal,"(",prop,")")
+    out <- rbind(out,data.frame(group,sample,OR.CI,pval,OR,upperCI,lowerCI))
+  }
+  out$pval <- ifelse(out$pval>=0.01,round(out$pval,2),format(out$pval,digits=3))
+  return(out)
+}
+```
+
+According to the smoothed curve, SBPs in NHANES can be partitioned into the same group as for SPRINT data <115 mmHg, 115-130mmHg, 131-140 mmHg and >140 mmHg, which is also comparable to SPRINT results. Because of the lowest logOR in 115-130mmHg, this group was chosen as a reference group. ORs of CVD risk in each partition groups were computed.
+
+#### Participants >=50 yr of age
+```{r eval=T, warning=FALSE,echo=FALSE, message=FALSE}
+SBP_all <- SBP_all_50
+pts <- c(min(SBP_all$SBP),114,130,140, max(SBP_all$SBP))
+SBP_all$SBPpart <- cut(SBP_all$SBP,pts,include.lowest=TRUE)
+orglev <- levels(SBP_all$SBPpart)
+# make 115-125 as reference group
+SBP_all <- within(SBP_all,SBPpart<- relevel(SBPpart,ref=2))
+# exam weights
+weighted1x=svydesign(id = ~SDMVPSU, strata = ~SDMVSTRA, data = SBP_all, nest=T, weights = SBP_all$WTMEC8YR)
+# logistic regression w/o covariate
+rega = svyglm(factor(CVD, levels = c("no heart disease", "heart disease")) ~  factor(SBPpart), design = weighted1x, family = "quasibinomial")
+ctOR <- subctOR(SBP_all,rega,"CVD","SBPpart")
+ctOR$group <- factor(ctOR$group, levels=orglev)
+ctOR <- ctOR[order(ctOR$group),]
+ctOR$group <- c("<115 mmHg","115-130 mmHg", "131-140 mmHg",">140 mmHg")
+ctOR_50 <- ctOR
+
+tb <- ctOR_50
+row.names(tb) <- NULL
+colnames(tb) <- c("group","CVD/Total(%)","OR (95%CI)","P value")
+pander(tb[,1:4])
+```
+
+#### Participants 40-50 yr of age
+```{r eval=T, warning=FALSE,echo=FALSE, message=FALSE}
+SBP_all <- SBP_all_40
+pts <- c(min(SBP_all$SBP),114,130,140, max(SBP_all$SBP))
+SBP_all$SBPpart <- cut(SBP_all$SBP,pts,include.lowest=TRUE)
+orglev <- levels(SBP_all$SBPpart)
+# make 115-125 as reference group
+SBP_all <- within(SBP_all,SBPpart<- relevel(SBPpart,ref=2))
+# exam weights
+weighted1x=svydesign(id = ~SDMVPSU, strata = ~SDMVSTRA, data = SBP_all, nest=T, weights = SBP_all$WTMEC8YR)
+# logistic regression w/o covariate
+rega = svyglm(factor(CVD, levels = c("no heart disease", "heart disease")) ~  factor(SBPpart), design = weighted1x, family = "quasibinomial")
+ctOR <- subctOR(SBP_all,rega,"CVD","SBPpart")
+ctOR$group <- factor(ctOR$group, levels=orglev)
+ctOR <- ctOR[order(ctOR$group),]
+ctOR$group <- c("<115 mmHg","115-130 mmHg", "131-140 mmHg",">140 mmHg")
+ctOR_40 <- ctOR
+
+tb <- ctOR_40
+row.names(tb) <- NULL
+colnames(tb) <- c("group","CVD/Total(%)","OR (95%CI)","P value")
+pander(tb[,1:4])
+```
+
+#### Nondiabetic participants >=50 yr of age
+```{r eval=T, warning=FALSE,echo=FALSE, message=FALSE}
+SBP_all <- SBP_all_nd
+pts <- c(min(SBP_all$SBP),114,130,140, max(SBP_all$SBP))
+SBP_all$SBPpart <- cut(SBP_all$SBP,pts,include.lowest=TRUE)
+orglev <- levels(SBP_all$SBPpart)
+# make 115-125 as reference group
+SBP_all <- within(SBP_all,SBPpart<- relevel(SBPpart,ref=2))
+# exam weights
+weighted1x=svydesign(id = ~SDMVPSU, strata = ~SDMVSTRA, data = SBP_all, nest=T, weights = SBP_all$WTMEC8YR)
+# logistic regression w/o covariate
+rega = svyglm(factor(CVD, levels = c("no heart disease", "heart disease")) ~  factor(SBPpart), design = weighted1x, family = "quasibinomial")
+ctOR <- subctOR(SBP_all,rega,"CVD","SBPpart")
+ctOR$group <- factor(ctOR$group, levels=orglev)
+ctOR <- ctOR[order(ctOR$group),]
+ctOR$group <- c("<115 mmHg","115-130 mmHg", "131-140 mmHg",">140 mmHg")
+ctOR_nd <- ctOR
+
+tb <- ctOR_nd
+row.names(tb) <- NULL
+colnames(tb) <- c("group","CVD/Total(%)","OR (95%CI)","P value")
+pander(tb[,1:4])
+```
+
+
+#### Diabetic participants >=50 yr of age
+```{r eval=T, warning=FALSE,echo=FALSE, message=FALSE}
+SBP_all <- SBP_all_d
+pts <- c(min(SBP_all$SBP),114,130,140, max(SBP_all$SBP))
+SBP_all$SBPpart <- cut(SBP_all$SBP,pts,include.lowest=TRUE)
+orglev <- levels(SBP_all$SBPpart)
+# make 115-125 as reference group
+SBP_all <- within(SBP_all,SBPpart<- relevel(SBPpart,ref=2))
+# exam weights
+weighted1x=svydesign(id = ~SDMVPSU, strata = ~SDMVSTRA, data = SBP_all, nest=T, weights = SBP_all$WTMEC8YR)
+# logistic regression w/o covariate
+rega = svyglm(factor(CVD, levels = c("no heart disease", "heart disease")) ~  factor(SBPpart), design = weighted1x, family = "quasibinomial")
+ctOR <- subctOR(SBP_all,rega,"CVD","SBPpart")
+ctOR$group <- factor(ctOR$group, levels=orglev)
+ctOR <- ctOR[order(ctOR$group),]
+ctOR$group <- c("<115 mmHg","115-130 mmHg", "131-140 mmHg",">140 mmHg")
+ctOR_d <- ctOR
+
+tb <- ctOR_d
+row.names(tb) <- NULL
+colnames(tb) <- c("group","CVD/Total(%)","OR (95%CI)","P value")
+pander(tb[,1:4])
+```
+
+## Conclusion 
+Subjects whose median trial SBP was within 115-140mmHg had nearly the same primary outcome and all-cause death rates, while those with medial trial SBP >140mmHg had higher rates of events. Thus, while SPRINT suggests that an SBP target of 120mmHg was better than 140mmHg, a target greater than 120mmHg may be just as beneficial while requiring fewer medications.

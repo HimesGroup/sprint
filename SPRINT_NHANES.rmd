@@ -1,0 +1,156 @@
+---
+title: "NHANES / SPRINT"
+author: "Edward Zhao, modifed by Mengyuan Kan"
+date: "February 14, 2017"
+output:   
+  html_document:
+    toc: true 
+    depth: 3 
+    theme: united 
+    highlight: tango
+---
+```{r set-options, echo=FALSE, cache=FALSE}
+options(width = 400)
+```
+
+##Comments
+* albuminuria criteria given by: http://jamanetwork.com/journals/jama/fullarticle/209357, calculated using urine albumin / urine creatinine * 100
+* eGFR calculations given by: "Using Standardized Serum Creatinine Values in the Modification of Diet in Renal Disease Study Equation for Estimating Glomerular Filtration Rate"
+* CKD criteria given by: http://jamanetwork.com/journals/jama/fullarticle/209357 Prevalence of Chronic Kidney Disease in the United States, https://www.niddk.nih.gov/health-information/health-statistics/Pages/kidney-disease-statistics-united-states.aspx, https://nccd.cdc.gov/ckd/detail.aspx?QNum=Q8 
+* CVD given as CHF, angina, MI, CHD, or stroke
+
+* Website download example: CDC->National Health and Nutrition Examination Survey->Questionnaires, Datasets, and Related Documentation->NHANES 2013-2014->Data, Documentation, Codebooks, SAS Code->Demographics->DEMO_H_Doc (code explanation) and DEMO_H_Data
+
+* NOTE: KIQ_U_H (Kidney Conditions - Urology, Questionnaire Data, 2013-2014) is not available
+
+```{r,message=FALSE, eval=FALSE}
+##Downloading data (not run every time, need to run if data not downloaded yet) 
+rm(list=ls())
+library(nhanesA) #R package for downloading NHANES data
+varlist=c("DEMO","MCQ","DIQ","SLQ","CDQ","BPQ",
+          "BPX","BMX","DBQ", "KIQ_U","INQ","SMQ","BIOPRO","ALB_CR") #list of modules
+varlist_all=paste0(rep(varlist,each=4),"_",c("E","F","G","H")) #list of modules for each year
+list_all=sapply(varlist_all,function(x){data.frame(nhanes(x))}) #get data for all modules
+
+for(i in 1:length(list_all)) {
+  assign(names(list_all)[i],list_all[[i]])
+} #separate list out
+save.image("NHANES/NHANES_SPRINT.RData") #save workspace
+```
+
+ 
+```{r,message=FALSE, echo=F}
+##Combining data
+library(plyr)
+library(Hmisc)
+library(knitr)
+rm(list=ls())
+load("NHANES/NHANES_SPRINT.RData") #load downloaded data
+for (i in 1:length(varlist)){
+  assign(varlist[i],rbind.fill(mget(grep(varlist[i],ls(),value=T))))
+} #combine years for each module
+rm(list=grep("_[EFGH]",ls(),value=T))
+
+data=merge(get(varlist[1]),get(varlist[2]),by="SEQN", all=T)
+for (i in 3:length(varlist)){
+  data=merge(data,get(varlist[i]),by="SEQN",all=T)
+} #combine all modules
+rm(list=ls()[-which(ls()=="data")])
+datax=data[data$RIDAGEYR>=20,] #adults
+
+```
+
+```{r, echo=F}
+##Data cleanup 
+
+#Socio/demographic variables
+datax$RIAGENDR=as.character(datax$RIAGENDR) #gender
+datax$RIDRETH1=as.character(datax$RIDRETH1) #ethnicity
+datax$DMDEDUC2=as.character(datax$DMDEDUC2) #eucation
+datax$DMDEDUC2[which(datax$DMDEDUC2==7 | datax$DMDEDUC2==9)]=NA
+datax$INDHHIN2[which(datax$INDHHIN2==77 | datax$INDHHIN2==99)]=NA #household income
+datax$INDHHIN2=as.character(datax$INDHHIN2)
+datax$INDFMPIRx[datax$INDFMPIR<=1]="<=1" #poverty income ratio
+datax$INDFMPIRx[datax$INDFMPIR>1]=">1"
+
+#BMI
+datax$BMXBMIx[datax$BMXBMI<18.50]="Underweight" #BMIx has 4 categories
+datax$BMXBMIx[datax$BMXBMI>=18.50 & datax$BMXBMI<25]="Normal" 
+datax$BMXBMIx[datax$BMXBMI>=25 & datax$BMXBMI<30]="Overweight" 
+datax$BMXBMIx[datax$BMXBMI>=30]="Obese" 
+datax$BMXBMIx2[datax$BMXBMI<18.50]="Underweight" #BMI has 5 categories, separating Obese 1 vs 2/3
+datax$BMXBMIx2[datax$BMXBMI>=18.50 & datax$BMXBMI<25]="Normal" 
+datax$BMXBMIx2[datax$BMXBMI>=25 & datax$BMXBMI<30]="Overweight"
+datax$BMXBMIx2[datax$BMXBMI>=30 & datax$BMXBMI<35]="Obese I" 
+datax$BMXBMIx2[datax$BMXBMI>=35]="Obese II" 
+
+#Smoking
+datax$SMQ020=as.character(datax$SMQ020) #Smoking
+datax$smoking[which(datax$SMQ040==1 | datax$SMQ020==2)]="current_smoker" #Smoking as categorical
+datax$smoking[which(datax$SMQ040==3)]=".former_smoker"
+datax$smoking[which(datax$SMQ020==2)]="..non_smoker"
+
+#Medical conditions questionnaire
+datax$MCQ053[which(datax$MCQ053==7 | datax$MCQ053==9)]=NA #anemia
+datax$MCQ092[which(datax$MCQ092==7 | datax$MCQ092==9)]=NA #blood transfusion
+datax$MCQ140[which(datax$MCQ140==7 | datax$MCQ140==9)]=NA #trouble seeing
+datax$MCQ160A[which(datax$MCQ160A==7 | datax$MCQ160A==9)]=NA #arthritis
+datax$MCQ160N[which(datax$MCQ160N==7 | datax$MCQ160N==9)]=NA #gout
+datax$MCQ160B[which(datax$MCQ160B==7 | datax$MCQ160B==9)]=NA #heart failure
+datax$MCQ160C[which(datax$MCQ160C==7 | datax$MCQ160C==9)]=NA #heart disease
+datax$MCQ160D[which(datax$MCQ160D==7 | datax$MCQ160D==9)]=NA #angina
+datax$MCQ160E[which(datax$MCQ160E==7 | datax$MCQ160E==9)]=NA #heart attack
+datax$MCQ160F[which(datax$MCQ160F==7 | datax$MCQ160F==9)]=NA #stroke
+datax$MCQ160G[which(datax$MCQ160G==7 | datax$MCQ160G==9)]=NA #emphysema
+datax$MCQ160M[which(datax$MCQ160M==7 | datax$MCQ160M==9)]=NA #thyroid problem
+datax$MCQ160K[which(datax$MCQ160K==7 | datax$MCQ160K==9)]=NA #chronic bronchitis
+datax$MCQ160L[which(datax$MCQ160L==7 | datax$MCQ160L==9)]=NA #liver condition
+datax$MCQ220[which(datax$MCQ220==7 | datax$MCQ220==9)]=NA #cancer
+datax$DBQ920[which(datax$DBQ920==7 | datax$DBQ920==9)]=NA #food allergies
+datax$BPQ020[which(datax$BPQ020==7 | datax$BPQ020==9)]=NA #hypertension
+datax$DIQ010[which(datax$DIQ010==3| datax$DIQ010==7 | datax$DIQ010==9)]=NA #diabetes
+datax$SLQ060[which(datax$SLQ060==7 | datax$SLQ060==9)]=NA #sleep disorder
+
+#Blood pressure
+datax$SBP=rowMeans(cbind(datax$BPXSY1,datax$BPXSY2,datax$BPXSY3,datax$BPXSY4),na.rm=T) #Systolic blood pressure, avg of all trials
+datax$DBP=rowMeans(cbind(datax$BPXDI1,datax$BPXDI2,datax$BPXDI3,datax$BPXDI4),na.rm=T) #Diastolic blood pressure, avg of all trials
+
+datax$SBPcat=NA
+datax$SBPcat[which(datax$SBP<100)]="<100" #n=924
+datax$SBPcat[which(datax$SBP<110 & datax$SBP>=100)]="100-109"
+datax$SBPcat[which(datax$SBP<120 & datax$SBP>=110)]="110-119"
+datax$SBPcat[which(datax$SBP<130 & datax$SBP>=120)]="120-129"
+datax$SBPcat[which(datax$SBP<140 & datax$SBP>=130)]="130-139"
+datax$SBPcat[which(datax$SBP<150 & datax$SBP>=140)]="140-149"
+datax$SBPcat[which(datax$SBP<160 & datax$SBP>=150)]="150-159"
+datax$SBPcat[which(datax$SBP>=160)]="160+" #n=769
+
+
+
+#CKD
+datax$eGFR=175*(datax$LBXSCR^(-1.154))*(datax$RIDAGEYR^(-0.203))*(1.212^(datax$RIDRETH1==4))*(0.742^(datax$RIAGENDR==2)) #eGFR according to 4 var MDRD formula
+datax$URDACT3=datax$URXUMA/datax$URXUCR*100
+datax$CKD=NA #chronic kidney disease
+datax$CKD[!is.na(datax$eGFR & datax$URDACT3)]="none"
+datax$CKD[which(datax$eGFR>=90 & datax$URDACT3>=30)]="stage1" #eGFR and albuminuria
+datax$CKD[which(datax$eGFR<90 & datax$eGFR>=60 & datax$URDACT>=30)]="stage2" #eGFR and albuminuria
+datax$CKD[which(datax$eGFR<60 & datax$eGFR>=30)]="stage3" #eGFR 
+datax$CKD[which(datax$eGFR<30 & datax$eGFR>=15)]="stage4" #eGFR
+datax$CKD[which(datax$eGFR<15 | datax$KIQ025==1)]="stage5" #eGFR  or dialysis
+
+#BPQ040A - Taking prescription for hypertension
+datax$BPQ040A[which(datax$BPQ040A==7 | datax$BPQ040A==9)]=NA
+datax$BPQ040A <- as.factor(datax$BPQ040A)
+
+#CVD
+datax$CVD[which(datax$MCQ160B==2 & datax$MCQ160C==2 & datax$MCQ160D==2 & datax$MCQ160E==2 & datax$MCQ160F==2)]="no heart disease"
+datax$CVD[which(datax$MCQ160B==1 | datax$MCQ160C==1 | datax$MCQ160D==1 | datax$MCQ160E==1 | datax$MCQ160F==1)]="heart disease"
+
+#Convert gender and race as factor 
+datax$RIAGENDR <- as.factor(datax$RIAGENDR)
+datax$RIDRETH1 <- as.factor(datax$RIDRETH1)
+```
+
+```{r, echo=F}
+write.csv(datax,"intermediate/NHANES.csv",row.names=F)
+```
