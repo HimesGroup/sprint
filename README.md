@@ -30,5 +30,7 @@ Because most of the standard vs. intensive treatment subjects who were close to 
 
 `SPRINTresults.html`: An html file corresponding to SPRINTresults.rmd. It can be downloaded to see a full report of our results that includes more details than those contained in the SPRINT abstract.
 
+`SPRINT_NHANES.rmd`: An R markdown file that documents [NHANES](https://www.cdc.gov/nchs/nhanes/) data download and clean process.
+
 ### Acknowledgements
 Thank you to Ryan Urbanowicz, Casey Greene, Rebecca Hubbard, and Jason Moore for productive discussions related to this project.
