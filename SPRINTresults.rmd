@@ -1,7 +1,7 @@
 ---
 title: "Target Systolic Blood Pressures Within 115-140mmHg Have Significantly Better Outcomes Than Systolic Blood Pressures >140mmHg"
-subtitle: 'Results for NEJM SPRINT Challenge'
-author: "Himes Lab"
+subtitle: 'Extended Results for NEJM SPRINT Challenge'
+author: "Mengyuan Kan (Postdoc in Himes Lab)"
 date: Feb 14, 2017
 output:
   html_document:
@@ -17,6 +17,7 @@ output:
 ```{r eval=TRUE, echo=FALSE, message=FALSE,warning=FALSE}
 ### load library ###
 library(knitr)
+library(dplyr)
 library(ggplot2)
 library(pander)
 library(data.table)
@@ -45,24 +46,73 @@ SPRINT determined that treating individuals to have systolic blood pressure (SBP
 * Occurance of serious adverse events during treatment: safety.csv
 * Blood pressure measured in each visit points duringn clinical trial course: bp.csv
     
-```{r eval=F, echo=FALSE, message=FALSE}
-baseline <- read.csv("data/baseline.csv") # study participants
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+###Prepare for one data file with baseline and outcome information###
+# import study participants
+baseline <- read.csv("data/baseline.csv")
+# set treatment arm as a factor
 baseline$INTENSIVE <- as.factor(baseline$INTENSIVE)
 levels(baseline$INTENSIVE) <- c("STANDARD","INTENSIVE")
+# set gender as a factor
 baseline$FEMALE <- as.factor(baseline$FEMALE)
 levels(baseline$FEMALE) <- c("MALE","FEMALE")
+# set baseline age subgroup as a factor
 baseline$SUB_SENIOR <- as.factor(baseline$SUB_SENIOR)
 levels(baseline$SUB_SENIOR) <- c("<75yr",">=75yr")
+# set baseline SBP subgroups as a factor
+baseline$SBPTERTILE <- as.factor(baseline$SBPTERTILE)
+levels(baseline$SBPTERTILE) <- c("<=132mmHg","132-145mmHg",">=145mmHg")
+# set CKD subgroups as a factor
+baseline$SUB_CKD <- as.factor(baseline$SUB_CKD)
+levels(baseline$SUB_CKD) <- c("NonCKD","CKD")
+# set CVD subgroups as a factor
+baseline$SUB_CVD <- as.factor(baseline$SUB_CVD)
+levels(baseline$SUB_CVD) <- c("NonCVD","CVD")
+# set race as a factor
+baseline$RACE_BLACK <- as.factor(baseline$RACE_BLACK)
+levels(baseline$RACE_BLACK) <- c("Nonblack","Black")
+# create dataset with information of maskid and treatment
+treatid <- subset(baseline,select=c(MASKID,INTENSIVE))
+# import outcomes
 outcomes <- read.csv("data/outcomes.csv")
 safety <- read.csv("data/safety.csv")
+# combine into one data file
 dat <- Reduce(function(x, y) merge(x, y, by="MASKID", all=TRUE), list(baseline,outcomes,safety))
 ```
 
+
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
-### Import data ###
-dat <- read.csv("intermediate/SPRINT.csv")
-bp <- read.csv("intermediate/bp.csv")
-SBP_5yr <- read.csv("intermediate/SBP_5yr.csv")
+###Prepare for bp file with visiting month information###
+# import bp measures
+bp <- read.csv("data/bp.csv")
+# add treatment arm information
+bp <- merge(treatid,bp)
+# remove missings in bp and convert visitcode as numeric code for visit month (e.g.RZ->0, 1M->1, ..., 54M->54) and generate new column "visitcode2"
+bp <- bp %>%
+  dplyr::filter(!is.na(SBP)) %>%
+  dplyr::mutate(visitcode2 = ifelse(VISITCODE=="RZ",0,gsub("M","",VISITCODE))) %>%
+  dplyr::mutate(visitcode2 = as.numeric(visitcode2)) %>%
+  dplyr::arrange(MASKID, visitcode2) # sort by MASKID (first, seconde)
+```
+
+
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+###Compute trial SBP statistics###
+bp_se <- bp
+bp_se <- bp_se[which((bp_se$visitcode2>0)&(bp_se$visitcode2<=54)),c("MASKID","visitcode2","SBP")]
+# convert data frame from long to wide
+setDT(bp_se)
+bp_wide <- dcast(bp_se,MASKID~visitcode2)
+# compute mean and SD
+bp_wide$mean <- round(apply(bp_wide[,-1], 1, mean,na.rm=TRUE))
+bp_wide$median <- round(apply(bp_wide[,-1], 1, median,na.rm=TRUE))
+setDF(bp_wide)
+```
+
+
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+###Combine outcome and trial SBP measure###
+SBP_5yr <- bp_wide[,c("MASKID","mean","median")]
 datbp_all <- merge(SBP_5yr,dat,by=c("MASKID"),all.x=TRUE)
 ```
 
@@ -160,6 +210,7 @@ Cox proportional HRs for the primary outcome and all-cause death were computed a
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
 ### Function used in this section ###
+# Cox proportional hazard ratio
 subctHR <- function(dt,x,covars) { # x: event name. Will add "EVENT_" for event coding and "T_" for time coding; covars: covariates in survival model. Put the one of interest (e.g. SBP) as the first one
   if (length(covars)==1) {covarexp <- covars} else {covarexp <- paste(covars,collapse="+")}
   if (grepl("SAE|ERS|MCE|OHO",x)){
@@ -223,6 +274,24 @@ subctHR <- function(dt,x,covars) { # x: event name. Will add "EVENT_" for event 
 }
 ```
 
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+# Hommel adjusted p-values for interaction effect
+subHRinter <- function(dt,x,invar,inter) { # x: event name. Will add "EVENT_" for event coding and "T_" for time coding; covars: covariates in survival model. Put the one of interest (e.g. SBP) as the first one; inter: subgroup membership for interaction analysis
+  if (grepl("SAE|ERS|MCE|OHO",x)){
+    event <- paste0(x,"_EVNT")
+    time <- paste0(x,"_DAYS")
+  } else {
+    event <- paste0("EVENT_",x)
+    time <- paste0("T_",x)
+  }
+  form <- as.formula(paste0("Surv(",time,",",event,")~",invar,"*",inter))
+  res <- summary(coxph(form,data=dt))
+  pvals <- unname(fit$coefficients[,5])
+  hpvals <- p.adjust(pvals,method="hommel")
+  return(hpvals[length(hpvals)])
+}
+```
+
 ```{r eval=F, echo=FALSE, message=FALSE}
 ### Function used in this section ###
 forplot <- function(dt,event){
@@ -240,16 +309,19 @@ forplot <- function(dt,event){
 }
 ```
 
-
-#### Primary outcome
-
-```{r eval=T, echo=FALSE, message=FALSE}
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+###Partition data into three groups###
 SBP_all <- datbp_all
 pts <- c(min(SBP_all$median),114,140,max(SBP_all$median))
 SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
 orglev <- levels(SBP_all$medianpar)
 # make the second group as reference group
 SBP_all <- within(SBP_all,medianpar<- relevel(medianpar,ref=2))
+```
+
+#### Primary outcome
+
+```{r eval=TRUE, echo=FALSE, message=FALSE}
 ctHR <- subctHR(SBP_all,"PRIMARY","medianpar")
 ctHR$group <- factor(ctHR$group, levels=orglev)
 ctHR <- ctHR[order(ctHR$group),]
@@ -264,13 +336,7 @@ pander(tb[,1:5])
 
 ##### All-cause death
 
-```{r eval=T, echo=FALSE, message=FALSE}
-SBP_all <- datbp_all
-pts <- c(min(SBP_all$median),114,140,max(SBP_all$median))
-SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
-orglev <- levels(SBP_all$medianpar)
-# make the second group as reference group
-SBP_all <- within(SBP_all,medianpar<- relevel(medianpar,ref=2))
+```{r eval=TRUE, echo=FALSE, message=FALSE}
 ctHR <- subctHR(SBP_all,"DEATH","medianpar")
 ctHR$group <- factor(ctHR$group, levels=orglev)
 ctHR <- ctHR[order(ctHR$group),]
@@ -281,6 +347,75 @@ tb <- ctHR_death3
 row.names(tb) <- NULL
 colnames(tb) <- c("group","Event/Total(%)","Intensive arm/Total(%)","HR (95%CI)","P value")
 pander(tb[,1:5])
+```
+
+
+### Cox proportional HR in <115 mmHg, 115-140 mmHg and >140 mmHg groups according to subphenotypes
+
+The effects of >140 mmHg on the rate of the primary outcome and on the rate of all-cause death were consistent across the prespecified subgroups, which were significantly higher than the effects of 115-140 mmHg.
+
+
+#### Primary outcome
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+# compute HRs in subphenotypes
+phenos <- c("SUB_CKD", "SUB_SENIOR", "RACE_BLACK","FEMALE", "SUB_CVD","SBPTERTILE")
+out <- cbind(subgroup="Overall",ctHR_death3)
+setDT(out)
+out <- dcast(out,subgroup~group,value.var=c("sample","HR.CI"))
+for (pheno in phenos) {
+  for (i in levels(SBP_all[,pheno])) {
+    subdat <- SBP_all[which(SBP_all[,pheno]==i),]
+    ctHR <- subctHR(subdat,"PRIMARY","medianpar")
+    ctHR$group <- factor(ctHR$group, levels=orglev)
+    ctHR <- ctHR[order(ctHR$group),]
+    ctHR$group <- c("<115 mmHg","115-140 mmHg",">140 mmHg")
+    ctHR$subgroup <- i
+    setDT(ctHR)
+    out <- rbind(out,dcast(ctHR,subgroup~group,value.var=c("sample","HR.CI")))
+  }
+}
+setDF(out)
+out<-out[,names(out)[!c(names(out)%in%"HR.CI_115-140 mmHg")]]
+#out$hpval <- hpval
+subctHR_death3 <- out
+
+tb <- subctHR_death3
+row.names(tb) <- NULL
+colnames(tb) <- c("subgroup","115-140 mmHg","<115 mmHg",">140 mmHg","<115 mmHg HR (95%CI)",">140 mmHg HR (95%CI)")
+pander(tb[,c(1:4)],caption="Number of events in each subgroup")
+pander(tb[,c(1,5,6)],caption="Proportional HR in each subgroup")
+```
+
+
+#### All-cause death
+```{r eval=TRUE, echo=FALSE, message=FALSE}
+# compute HRs in subphenotypes
+phenos <- c("SUB_CKD", "SUB_SENIOR", "RACE_BLACK","FEMALE", "SUB_CVD","SBPTERTILE")
+out <- cbind(subgroup="Overall",ctHR_death3)
+setDT(out)
+out <- dcast(out,subgroup~group,value.var=c("sample","HR.CI"))
+for (pheno in phenos) {
+  for (i in levels(SBP_all[,pheno])) {
+    subdat <- SBP_all[which(SBP_all[,pheno]==i),]
+    ctHR <- subctHR(subdat,"DEATH","medianpar")
+    ctHR$group <- factor(ctHR$group, levels=orglev)
+    ctHR <- ctHR[order(ctHR$group),]
+    ctHR$group <- c("<115 mmHg","115-140 mmHg",">140 mmHg")
+    ctHR$subgroup <- i
+    setDT(ctHR)
+    out <- rbind(out,dcast(ctHR,subgroup~group,value.var=c("sample","HR.CI")))
+  }
+}
+setDF(out)
+out<-out[,names(out)[!c(names(out)%in%"HR.CI_115-140 mmHg")]]
+#out$hpval <- hpval
+subctHR_death3 <- out
+
+tb <- subctHR_death3
+row.names(tb) <- NULL
+colnames(tb) <- c("subgroup","115-140 mmHg","<115 mmHg",">140 mmHg","<115 mmHg HR (95%CI)",">140 mmHg HR (95%CI)")
+pander(tb[,c(1:4)],caption="Number of events in each subgroup")
+pander(tb[,c(1,5,6)],caption="Proportional HR in each subgroup")
 ```
 
 
@@ -310,7 +445,7 @@ colnames(tb) <- c("group","Event/Total(%)","Intensive arm/Total(%)","HR (95%CI)"
 pander(tb[,1:5])
 ```
 
-#### Death outcome
+#### All-cause death
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
 SBP_all <- datbp_all
@@ -539,7 +674,7 @@ termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="median trial SBP", ylabs="log(OR)",
 
 ### ORs in <115 mmHg, 115-130 mmHg, 131-140 mmHg and >140 mmHg groups
 
-```{r eval=T, warning=FALSE,echo=FALSE, message=FALSE, results="hide"}
+```{r eval=TRUE, warning=FALSE,echo=FALSE, message=FALSE, results="hide"}
 ### Function used in this section ###
 subctOR <- function(dt,res,event,invar) {
   # create reference variable
@@ -578,7 +713,7 @@ subctOR <- function(dt,res,event,invar) {
 According to the smoothed curve, SBPs in NHANES can be partitioned into the same group as for SPRINT data <115 mmHg, 115-130mmHg, 131-140 mmHg and >140 mmHg, which is also comparable to SPRINT results. Because of the lowest logOR in 115-130mmHg, this group was chosen as a reference group. ORs of CVD risk in each partition groups were computed.
 
 #### Participants >=50 yr of age
-```{r eval=T, warning=FALSE,echo=FALSE, message=FALSE}
+```{r eval=TRUE, warning=FALSE,echo=FALSE, message=FALSE}
 SBP_all <- SBP_all_50
 pts <- c(min(SBP_all$SBP),114,130,140, max(SBP_all$SBP))
 SBP_all$SBPpart <- cut(SBP_all$SBP,pts,include.lowest=TRUE)
@@ -602,7 +737,7 @@ pander(tb[,1:4])
 ```
 
 #### Participants 40-50 yr of age
-```{r eval=T, warning=FALSE,echo=FALSE, message=FALSE}
+```{r eval=TRUE, warning=FALSE,echo=FALSE, message=FALSE}
 SBP_all <- SBP_all_40
 pts <- c(min(SBP_all$SBP),114,130,140, max(SBP_all$SBP))
 SBP_all$SBPpart <- cut(SBP_all$SBP,pts,include.lowest=TRUE)
@@ -626,7 +761,7 @@ pander(tb[,1:4])
 ```
 
 #### Nondiabetic participants >=50 yr of age
-```{r eval=T, warning=FALSE,echo=FALSE, message=FALSE}
+```{r eval=TRUE, warning=FALSE,echo=FALSE, message=FALSE}
 SBP_all <- SBP_all_nd
 pts <- c(min(SBP_all$SBP),114,130,140, max(SBP_all$SBP))
 SBP_all$SBPpart <- cut(SBP_all$SBP,pts,include.lowest=TRUE)
@@ -651,7 +786,7 @@ pander(tb[,1:4])
 
 
 #### Diabetic participants >=50 yr of age
-```{r eval=T, warning=FALSE,echo=FALSE, message=FALSE}
+```{r eval=TRUE, warning=FALSE,echo=FALSE, message=FALSE}
 SBP_all <- SBP_all_d
 pts <- c(min(SBP_all$SBP),114,130,140, max(SBP_all$SBP))
 SBP_all$SBPpart <- cut(SBP_all$SBP,pts,include.lowest=TRUE)
