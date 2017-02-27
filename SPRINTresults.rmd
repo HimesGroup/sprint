@@ -203,6 +203,57 @@ fit <- coxph(Surv(T_PRIMARYORDEATH,EVENT_PRIMARYORDEATH)~pspline(median,df=4),da
 termplot(fit,se=TRUE,rug=TRUE,xlab="Median trial SBP",ylab="Log(Hazard ratio)",terms=1,main="Primary outcome or death")
 ```
 
+
+### Cumulative hazard proportion for primary and all-cause death
+
+Cumulative hazard proportion was plotted for <115 mmHg, 115-140 mmHg and >140 mmHg. The separation in primary outcome between >140 mmHg group and the other two groups were apparent at 1 year, and in all-cause death became apparent at 2 years, indicating the difference in cumulative hazards in >140 mmHg compared with the other two groups.
+
+
+```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
+SBP_all <- datbp_all
+pts <- c(min(SBP_all$median),114,140,max(SBP_all$median))
+SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
+
+# Primary outcome
+# NOTE: "#F8766D" (red) "#00BA38" (green)  "#619CFF" (blue)
+fit <- survfit(Surv(T_PRIMARY,EVENT_PRIMARY)~medianpar,data=SBP_all)
+autoplot(fit,fun="event",conf.int.fill=NULL, surv.linetype=1,surv.size=0.5,censor=FALSE,xlim=c(0,1825))  + ggtitle("Cumulative hazards for primary outcome") + xlab("Years") + ylab("Cumulative hazard") + scale_x_continuous(expand=c(0,0),limits=c(0,1900),breaks=c(365,730,1095,1460,1825),labels=c(1:5)) +
+  scale_y_continuous(expand=c(0,0),limits=c(0,0.13),breaks=seq(0,0.12,0.02)) +
+  theme(
+  panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  axis.line = element_line(colour = "black"),
+  legend.title=element_blank(),legend.position="none",
+  plot.title = element_text(hjust = 0.5)
+  #axis.title=element_text(size=8.5),
+  #axis.text=element_text(size=8),
+  #axis.ticks=element_line(size=0.5)
+  ) + 
+  annotate("text", x=1600, y=0.053, label= "<115 mmHg", color="#619CFF") +
+  annotate("text", x=1570, y=0.080, label= "115-140 mmHg", color="#F8766D") +
+  annotate("text", x=1600, y=0.110, label= ">140 mmHg", color="#00BA38")
+
+# All-cause death
+fit <- survfit(Surv(T_DEATH,EVENT_DEATH)~medianpar,data=SBP_all)
+autoplot(fit,fun="event",conf.int.fill=NULL, surv.linetype=1,surv.size=0.5,censor=FALSE,xlim=c(0,1825)) + ggtitle("Cumulative hazards for all-cause death") + xlab("Years") + ylab("Cumulative hazard") + scale_x_continuous(expand=c(0,0),limits=c(0,1900),breaks=c(365,730,1095,1460,1825),labels=c(1:5)) +
+  scale_y_continuous(expand=c(0,0),limits=c(0,0.13),breaks=seq(0,0.12,0.02)) +
+  theme(
+  panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  axis.line = element_line(colour = "black"),
+  legend.title=element_blank(),legend.position="none",
+  plot.title = element_text(hjust = 0.5)
+  #axis.title=element_text(size=8.5),
+  #axis.text=element_text(size=8),
+  #axis.ticks=element_line(size=0.5)
+  ) + 
+  annotate("text", x=1600, y=0.067, label= "<115 mmHg", color="#619CFF") +
+  annotate("text", x=1570, y=0.03, label= "115-140 mmHg", color="#F8766D") +
+  annotate("text", x=1600, y=0.12, label= ">140 mmHg", color="#00BA38")
+```
+
+***
+
+
+
 ### Cox proportional HR in <115 mmHg, 115-140 mmHg and >140 mmHg groups
 
 Cox proportional HRs for the primary outcome and all-cause death were computed according to the partitions observed from the curves, which are <115 mmHg, 115-140 mmHg and > 140 mmHg. Because of the lowest risk in 115-140 mmHg, this group was chosen as a reference group. Relative to the 115-130 mmHg group, the HRs for the primary outcome and all-cause death were not significantly different for the <115 or 131-140 mmHg groups. The >140mmHg group continued to have elevated risk, and relative to the 115-130mmHg group, had a hazard ratio of 1.84 (95% CI 1.40-2.41; p-value 1.1x10-5) for the primary outcome and 2.32 (95% CI 1.68-3.19; p-value 2.5x10-7) for all-cause death. For all-cause death, the HR in <115 mmHg group is slightly higer than 115-140 mmHg group despite of insignificant difference. 
@@ -286,7 +337,7 @@ subHRinter <- function(dt,x,invar,inter) { # x: event name. Will add "EVENT_" fo
   }
   form <- as.formula(paste0("Surv(",time,",",event,")~",invar,"*",inter))
   res <- summary(coxph(form,data=dt))
-  pvals <- unname(fit$coefficients[,5])
+  pvals <- unname(res$coefficients[,5])
   hpvals <- p.adjust(pvals,method="hommel")
   return(hpvals[length(hpvals)])
 }
@@ -467,53 +518,6 @@ pander(tb[,1:5])
 ```
 
 
-### Cumulative hazard proportion for primary and all-cause death
-
-Cumulative hazard proportion was plotted for <115 mmHg, 115-140 mmHg and >140 mmHg. The separation in primary outcome between >140 mmHg group and the other two groups were apparent at 1 year, and in all-cause death became apparent at 2 years, indicating the difference in cumulative hazards in >140 mmHg compared with the other two groups.
-
-
-```{r eval=TRUE, echo=FALSE, message=FALSE,fig.width=4.5,fig.height=4}
-SBP_all <- datbp_all
-pts <- c(min(SBP_all$median),114,140,max(SBP_all$median))
-SBP_all$medianpar <- cut(SBP_all$median,pts,include.lowest=TRUE)
-
-# Primary outcome
-# NOTE: "#F8766D" (red) "#00BA38" (green)  "#619CFF" (blue)
-fit <- survfit(Surv(T_PRIMARY,EVENT_PRIMARY)~medianpar,data=SBP_all)
-autoplot(fit,fun="event",conf.int.fill=NULL, surv.linetype=1,surv.size=0.5,censor=FALSE,xlim=c(0,1825))  + ggtitle("Cumulative hazards for primary outcome") + xlab("Years") + ylab("Cumulative hazard") + scale_x_continuous(expand=c(0,0),limits=c(0,1900),breaks=c(365,730,1095,1460,1825),labels=c(1:5)) +
-  scale_y_continuous(expand=c(0,0),limits=c(0,0.13),breaks=seq(0,0.12,0.02)) +
-  theme(
-  panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-  axis.line = element_line(colour = "black"),
-  legend.title=element_blank(),legend.position="none",
-  plot.title = element_text(hjust = 0.5)
-  #axis.title=element_text(size=8.5),
-  #axis.text=element_text(size=8),
-  #axis.ticks=element_line(size=0.5)
-  ) + 
-  annotate("text", x=1600, y=0.053, label= "<115 mmHg", color="#619CFF") +
-  annotate("text", x=1570, y=0.080, label= "115-140 mmHg", color="#F8766D") +
-  annotate("text", x=1600, y=0.110, label= ">140 mmHg", color="#00BA38")
-
-# All-cause death
-fit <- survfit(Surv(T_DEATH,EVENT_DEATH)~medianpar,data=SBP_all)
-autoplot(fit,fun="event",conf.int.fill=NULL, surv.linetype=1,surv.size=0.5,censor=FALSE,xlim=c(0,1825)) + ggtitle("Cumulative hazards for all-cause death") + xlab("Years") + ylab("Cumulative hazard") + scale_x_continuous(expand=c(0,0),limits=c(0,1900),breaks=c(365,730,1095,1460,1825),labels=c(1:5)) +
-  scale_y_continuous(expand=c(0,0),limits=c(0,0.13),breaks=seq(0,0.12,0.02)) +
-  theme(
-  panel.background = element_blank(), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-  axis.line = element_line(colour = "black"),
-  legend.title=element_blank(),legend.position="none",
-  plot.title = element_text(hjust = 0.5)
-  #axis.title=element_text(size=8.5),
-  #axis.text=element_text(size=8),
-  #axis.ticks=element_line(size=0.5)
-  ) + 
-  annotate("text", x=1600, y=0.067, label= "<115 mmHg", color="#619CFF") +
-  annotate("text", x=1570, y=0.03, label= "115-140 mmHg", color="#F8766D") +
-  annotate("text", x=1600, y=0.12, label= ">140 mmHg", color="#00BA38")
-```
-
-***
 
 ## Splines-based hazard ratio for serious adverse events (SAEs)
 
@@ -616,7 +620,7 @@ for (i in 1:length(x)) {
 To assess whether ideal SBP differed over a wider range of values and to other age groups, we used 2007-2014 data from the [National Health and Nutrition Examination Survey (NHANES)](https://www.cdc.gov/nchs/nhanes/), a cross-sectional study that includes extensive in-person interviews and physical exams. We created a composite cardiovascular disease (CVD) outcome by assigning case status to subjects who had congestive heart failure, coronary heart disease, angina, heart attack, and or stroke, and control status to those who did not have any of those outcomes. 
 
 
-2007-2014 NHANSE data were downloaded and cleaned using R codes from NHANSE_SPRINT.rmd. There are 23,482 adults 20 years old or greater, with 10,704 participants 50 years old or greater and 3,719 at age of 40-50 years old. Among senior adults 50 years or greater, 2,255 are diabetic and 8,085 are non-diabetic.
+2007-2014 NHANES data were downloaded and cleaned using R codes from NHANES_SPRINT.rmd. There are 23,482 adults 20 years old or greater, with 10,704 participants 50 years old or greater and 3,719 at age of 40-50 years old. Among senior adults 50 years or greater, 2,255 are diabetic and 8,085 are non-diabetic.
 
 
 
@@ -643,14 +647,14 @@ SBP_all <- datax
 SBP_all <- SBP_all[!is.na(SBP_all$SBP),]
 SBP_all_50 <- SBP_all[which(SBP_all$RIDAGEYR>=50),] # senior people
 glm <- glm(CVD~ns(SBP,4),data=SBP_all_50,family="quasibinomial")
-termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="median trial SBP", ylabs="log(OR)",main="participants >= 50 yr of age")
+termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="SBP", ylabs="log(OR)",main="participants >= 50 yr of age")
 
 
 SBP_all <- datax
 SBP_all <- SBP_all[!is.na(SBP_all$SBP),]
 SBP_all_40 <- SBP_all[which(SBP_all$RIDAGEYR>=40&SBP_all$RIDAGEYR<50),] # younger people
 glm <- glm(CVD~ns(SBP,4),data=SBP_all_40,family="quasibinomial")
-termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="median trial SBP", ylabs="log(OR)",main="participants 40-50 yr of age")
+termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="SBP", ylabs="log(OR)",main="participants 40-50 yr of age")
 ```
 
 As SPRINT only included senior and nondiabetic participants while NHANES contains both nondiabetic and diabetic participants, we evaluated CVD risk in non-diabetic and diabetic participants separatedly. In both senior nondiabetic (the left figure) and diabetic participants (the right figure), the lowest logOR was shown at 120 mmHg, while in nondiabetic participants the curve decreased sharply in the region of SBP <120 mmHg compared to that in diabetic participants.
@@ -661,14 +665,14 @@ SBP_all <- datax
 SBP_all <- SBP_all[!is.na(SBP_all$SBP),]
 SBP_all_nd <- SBP_all[which((SBP_all$DIQ010==2)&(SBP_all$RIDAGEYR>=50)),] # senior nondiabetics N=6158
 glm <- glm(CVD~ns(SBP,4),data=SBP_all_nd,family="quasibinomial")
-termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="median trial SBP", ylabs="log(OR)",main="Nondiabetic participants >= 50 yr of age")
+termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="SBP", ylabs="log(OR)",main="Nondiabetic participants >= 50 yr of age")
 
 
 SBP_all <- datax
 SBP_all <- SBP_all[!is.na(SBP_all$SBP),]
 SBP_all_d <- SBP_all[which((SBP_all$DIQ010==1)&(SBP_all$RIDAGEYR>=50)),] # senior diabetics
 glm <- glm(CVD~ns(SBP,4),data=SBP_all_d,family="quasibinomial")
-termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="median trial SBP", ylabs="log(OR)",main="Diabetic participants >= 50 yr of age")
+termplot(glm,se=TRUE,rug=TRUE,terms=1,xlabs="SBP", ylabs="log(OR)",main="Diabetic participants >= 50 yr of age")
 ```
 
 
