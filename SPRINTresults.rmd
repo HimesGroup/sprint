@@ -327,7 +327,7 @@ subctHR <- function(dt,x,covars) { # x: event name. Will add "EVENT_" for event 
 
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
 # Hommel adjusted p-values for interaction effect
-subHRinter <- function(dt,x,invar,inter) { # x: event name. Will add "EVENT_" for event coding and "T_" for time coding; covars: covariates in survival model. Put the one of interest (e.g. SBP) as the first one; inter: subgroup membership for interaction analysis
+interhomp <- function(dt,x,invar,inter) { # x: event name. Will add "EVENT_" for event coding and "T_" for time coding; covars: covariates in survival model. Put the one of interest (e.g. SBP) as the first one; inter: subgroup membership for interaction analysis
   if (grepl("SAE|ERS|MCE|OHO",x)){
     event <- paste0(x,"_EVNT")
     time <- paste0(x,"_DAYS")
@@ -336,10 +336,16 @@ subHRinter <- function(dt,x,invar,inter) { # x: event name. Will add "EVENT_" fo
     time <- paste0("T_",x)
   }
   form <- as.formula(paste0("Surv(",time,",",event,")~",invar,"*",inter))
+  # remove missingness
+  dt <- dt[,c(time,event,invar,inter)]
+  dt <- dt[complete.cases(dt),]
+  # compute HR for each subgroup
   res <- summary(coxph(form,data=dt))
   pvals <- unname(res$coefficients[,5])
   hpvals <- p.adjust(pvals,method="hommel")
-  return(hpvals[length(hpvals)])
+  hpval <- hpvals[length(hpvals)]
+  hpval <- ifelse(hpval>=0.01,round(hpval,2),format(hpval,digits=3))
+  return(hpval)
 }
 ```
 
@@ -403,17 +409,21 @@ pander(tb[,1:5])
 
 ### Cox proportional HR in <115 mmHg, 115-140 mmHg and >140 mmHg groups according to subphenotypes
 
-The effects of >140 mmHg on the rate of the primary outcome and on the rate of all-cause death were consistent across the prespecified subgroups, which were significantly higher than the effects of 115-140 mmHg.
+The effects of >140 mmHg on the rate of the primary outcome and on the rate of all-cause death were consistent across the prespecified subgroups, which were significantly higher than the effects of 115-140 mmHg. For each subgroup analysis, a proportional hazards model is similar to the one usded for the primary outcome and all-cause death analyses.
+
+For p-values for interaction, an interaction term with SBP partition category by subgroup was added in the model. The p-value in each subgroup was adjusted for interaction effects using Hommel's method. P-values shown in the table were the interaction between the >140 mmHg group and subgroups, while it was shown repeatedly for each subgroup for visualization purpose. 
 
 
 #### Primary outcome
 ```{r eval=TRUE, echo=FALSE, message=FALSE}
 # compute HRs in subphenotypes
 phenos <- c("SUB_CKD", "SUB_SENIOR", "RACE_BLACK","FEMALE", "SUB_CVD","SBPTERTILE")
-out <- cbind(subgroup="Overall",ctHR_death3)
+out <- cbind(subgroup="Overall",ctHR_primary3)
 setDT(out)
 out <- dcast(out,subgroup~group,value.var=c("sample","HR.CI"))
+hpvals <- NA # collect Hommel adjusted p-values
 for (pheno in phenos) {
+  hpval <- interhomp(SBP_all,"PRIMARY","medianpar",pheno)
   for (i in levels(SBP_all[,pheno])) {
     subdat <- SBP_all[which(SBP_all[,pheno]==i),]
     ctHR <- subctHR(subdat,"PRIMARY","medianpar")
@@ -423,18 +433,23 @@ for (pheno in phenos) {
     ctHR$subgroup <- i
     setDT(ctHR)
     out <- rbind(out,dcast(ctHR,subgroup~group,value.var=c("sample","HR.CI")))
+    hpvals <- c(hpvals,hpval)
   }
 }
 setDF(out)
 out<-out[,names(out)[!c(names(out)%in%"HR.CI_115-140 mmHg")]]
-#out$hpval <- hpval
-subctHR_death3 <- out
+out$hpvals <- hpvals
+subctHR_primary3 <- out
 
-tb <- subctHR_death3
+tb <- subctHR_primary3
 row.names(tb) <- NULL
-colnames(tb) <- c("subgroup","115-140 mmHg","<115 mmHg",">140 mmHg","<115 mmHg HR (95%CI)",">140 mmHg HR (95%CI)")
-pander(tb[,c(1:4)],caption="Number of events in each subgroup")
-pander(tb[,c(1,5,6)],caption="Proportional HR in each subgroup")
+tb1 <- tb[,c(1:4)]
+colnames(tb1) <- c("subgroup","115-140 mmHg","<115 mmHg",">140 mmHg")
+pander(tb1,caption="Number of events in each subgroup")
+
+tb2 <- tb[,c(1,5,6,7)]
+colnames(tb2) <- c("subgroup","<115 mmHg",">140 mmHg","P value for interaction")
+pander(tb2,caption="Proportional HR (95% CI) in each subgroup")
 ```
 
 
@@ -445,7 +460,9 @@ phenos <- c("SUB_CKD", "SUB_SENIOR", "RACE_BLACK","FEMALE", "SUB_CVD","SBPTERTIL
 out <- cbind(subgroup="Overall",ctHR_death3)
 setDT(out)
 out <- dcast(out,subgroup~group,value.var=c("sample","HR.CI"))
+hpvals <- NA # collect Hommel adjusted p-values
 for (pheno in phenos) {
+  hpval <- interhomp(SBP_all,"DEATH","medianpar",pheno)
   for (i in levels(SBP_all[,pheno])) {
     subdat <- SBP_all[which(SBP_all[,pheno]==i),]
     ctHR <- subctHR(subdat,"DEATH","medianpar")
@@ -455,18 +472,23 @@ for (pheno in phenos) {
     ctHR$subgroup <- i
     setDT(ctHR)
     out <- rbind(out,dcast(ctHR,subgroup~group,value.var=c("sample","HR.CI")))
+    hpvals <- c(hpvals,hpval)
   }
 }
 setDF(out)
 out<-out[,names(out)[!c(names(out)%in%"HR.CI_115-140 mmHg")]]
-#out$hpval <- hpval
+out$hpvals <- hpvals
 subctHR_death3 <- out
 
 tb <- subctHR_death3
 row.names(tb) <- NULL
-colnames(tb) <- c("subgroup","115-140 mmHg","<115 mmHg",">140 mmHg","<115 mmHg HR (95%CI)",">140 mmHg HR (95%CI)")
-pander(tb[,c(1:4)],caption="Number of events in each subgroup")
-pander(tb[,c(1,5,6)],caption="Proportional HR in each subgroup")
+tb1 <- tb[,c(1:4)]
+colnames(tb1) <- c("subgroup","115-140 mmHg","<115 mmHg",">140 mmHg")
+pander(tb1,caption="Number of events in each subgroup")
+
+tb2 <- tb[,c(1,5,6,7)]
+colnames(tb2) <- c("subgroup","<115 mmHg",">140 mmHg","P value for interaction")
+pander(tb2,caption="Proportional HR (95% CI) in each subgroup")
 ```
 
 
